@@ -34,6 +34,8 @@ void main( int argc, char *argv[] )
 		return;
 	}
 
+
+	VGA256FadeOut();
 	VBE_SetMode (iMode, 1, 1);
 	VGA256_Video = VBE_GetVideoPtr(iMode);
 	
@@ -52,6 +54,15 @@ void main( int argc, char *argv[] )
 	VGA256PutSprite(VGA256_Video, gacPerin, 300, 200, 320, 200);
 	getch();
 
+
+	VGA256ClearScreen(VGA256_Video, 0);
+	b = malloc(VGA256_WIDTH * VGA256_HEIGHT * 4);
+	memset(b, 0, VGA256_WIDTH * VGA256_HEIGHT * 4);
+	VGA256ScaleImage(b, gacPerin, 640, 480, 320, 200);
+	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 480);
+	free(b);
+	getch();
+
 	b = malloc(VGA256_WIDTH * VGA256_HEIGHT);
 	for (i = 0; i < 100; i++)
 	{
@@ -61,6 +72,7 @@ void main( int argc, char *argv[] )
 		VGA256PutImage(VGA256_Video, b, i, 0, 320, 200);
 	}
 	free(b);
+	getch();
 
 	VGA256FadeOut();
 	

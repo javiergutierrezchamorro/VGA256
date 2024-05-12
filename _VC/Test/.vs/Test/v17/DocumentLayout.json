@@ -1,0 +1,36 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "D:\\PROYECTOS\\VGA256\\_VC\\Test\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{C7D524FD-EA6B-40DD-B513-03126594DB4A}|Test.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\test.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 0,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "test.c",
+              "DocumentMoniker": "D:\\PROYECTOS\\VGA256\\Source\\test.c",
+              "RelativeDocumentMoniker": "..\\..\\Source\\test.c",
+              "ToolTip": "D:\\PROYECTOS\\VGA256\\Source\\test.c",
+              "RelativeToolTip": "..\\..\\Source\\test.c",
+              "ViewState": "AQIAABQAAAAAAAAAAAAiwDsAAAAAAAAA",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
+              "WhenOpened": "2024-05-11T18:38:58.519Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

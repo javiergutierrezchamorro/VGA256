@@ -18,10 +18,10 @@
     <ClCompile Include="..\..\Source\data.c">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Source\main.c">
+    <ClCompile Include="..\..\Source\vga256.c">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\Source\vga256.c">
+    <ClCompile Include="..\..\Source\main.c">
       <Filter>Archivos de origen</Filter>
     </ClCompile>
   </ItemGroup>

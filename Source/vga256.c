@@ -719,6 +719,46 @@ void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int
     }
 }
 
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
+{
+    unsigned int h, w;
+    unsigned int widthrun, widthtarget;
+    unsigned int heightrun, heighttarget;
+    unsigned char pixel;
+
+
+    heightrun = 0;
+    heighttarget = 0;
+    for (h = 0; h < heights; h++)
+    {
+        widthrun = 0;
+        widthtarget = 0;
+        for (w = 0; w < widths; w++)
+        {
+            pixel = *pSource;
+            widthtarget += widthd;
+            while (widthrun < widthtarget)
+            {
+                *pDest = pixel;
+                pDest++;
+                widthrun += widths;
+            }
+            pSource++;
+        }
+        widthtarget += widthd;
+
+        heighttarget += heightd;
+        while (heightrun < heighttarget)
+        {
+            memcpy(pDest, pDest - widthd, widthd);
+            pDest += widthd;
+            heightrun += heights;
+        }
+        pSource += widths;
+    }
+}
+
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256WaitVRetrace(void)
@@ -897,21 +937,6 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
             b += d2y;
         }
     }
-}
-
-
-/*------------------------------------------------------------------------------------------------------- */
-int _VGA256Sgn(int a)
-{
-    if (a > 0)
-    {
-        return (+1);
-    }
-    else if (a < 0)
-    {
-        return (-1);
-    }
-    return (0);
 }
 
 
