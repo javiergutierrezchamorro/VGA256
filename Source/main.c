@@ -1,11 +1,8 @@
-#include "VGA256.h"
 #include "data.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-
-
+#include "VGA256.h"
 
 
 unsigned char *VGA256_Video;
@@ -52,7 +49,6 @@ void main( int argc, char *argv[] )
 	VGA256PutImage(VGA256_Video, gacPerin, 10, 10, 320, 200);
 	VGA256PutSprite(VGA256_Video, gacPerin, 300, 200, 320, 200);
 	getch();
-
 
 	VGA256ClearScreen(VGA256_Video, 0);
 	b = malloc(VGA256_WIDTH * VGA256_HEIGHT * 4);

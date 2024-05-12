@@ -1,11 +1,11 @@
 /*------------------------------------------------------------------------------------------------------- */
-#include "vga256.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>
 #include <conio.h>
 #include <malloc.h>
+#include "vga256.h"
 
 
 
@@ -719,9 +719,9 @@ void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
 {
-    unsigned int h, w;
     unsigned int widthrun, widthtarget;
     unsigned int heightrun, heighttarget;
+    unsigned int h, w;
     unsigned char pixel;
 
 
@@ -735,13 +735,13 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
         {
             widthtarget += widthd;
             pixel = *pSource;
+            pSource++;
             while (widthrun < widthtarget)
             {
                 *pDest = pixel;
                 pDest++;
                 widthrun += widths;
             }
-            pSource++;
         }
 
         heighttarget += heightd;
@@ -755,7 +755,6 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
 }
 
 
-
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256WaitVRetrace(void)
 {
@@ -765,7 +764,7 @@ void VGA256WaitVRetrace(void)
 
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256SetPalette(const void *pal);
+//void VGA256SetPalette(const void *pal);
 #pragma aux VGA256SetPalette =\
     "mov ecx, 256*3"\
     "xor al, al"\
@@ -779,7 +778,7 @@ modify exact[ESI EDX ECX EAX];
 
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256GetPalette(void* pal);
+//void VGA256GetPalette(void* pal);
 #pragma aux VGA256GetPalette =\
     "mov ecx, 256*3"\
     "xor al, al"\
@@ -944,7 +943,7 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
 
 
 /*------------------------------------------------------------------------------------------------------- */
-void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
+//void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
 #pragma aux _VGA256MemCpy0 =\
 	"cld"\
 	"push ecx"\
@@ -990,5 +989,5 @@ void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
     "dec ecx"\
 	"jnz draw_px_5"\
 	"draw_px_7:"\
-parm [EDI][ESI][ECX] \
+parm [EDI][ESI][ECX]\
 modify exact [EDI ESI ECX EBX EAX];

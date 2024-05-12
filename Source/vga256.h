@@ -169,11 +169,9 @@ void VGA256FadeTo(char* paleta);
 void VGA256Circle(void* pVideo, unsigned x, unsigned int y, unsigned int radio, unsigned int color);
 void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned char color);
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights);
+
+
 #define _VGA256Sgn(a) (a > 0 ? 1 : (a < 0 ? -1 : 0))
-
-
-
-//int _VGA256Sgn(int a);
 void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
 
 #ifdef __cplusplus
