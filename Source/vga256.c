@@ -11,12 +11,10 @@
 
 
 /*------------------------------------------------------------------------------------------------------- */
-#pragma pack (1)
+#pragma pack (push, 1)
 
 #define VBE2SIGNATURE "VBE2"
 #define VBE3SIGNATURE "VBE3"
-
-
 
 static struct rminfo
 {
@@ -86,6 +84,8 @@ int  Mystique_FindMode(int xres, int yres, char bpp);
 static int    mga_maxmode;
 static int    mga_detect = 0;
 static char   *mgabase1;       /* 16k register address space */
+
+#pragma pack (pop)
 
 static void PrepareRegisters (void)
 {
@@ -603,6 +603,15 @@ void Mystique_SetMode (short Mode, int linear, int clear)
 
 
 /*------------------------------------------------------------------------------------------------------- */
+#define peekb(s,o)			(*((unsigned char *) MK_FP((s),(o))))
+#define peekw(s,o)			(*((unsigned short *) MK_FP((s),(o))))
+#define peekl(s,o)			(*((unsigned long *) MK_FP((s),(o))))
+#define pokeb(s,o,x)		(*((unsigned char *) MK_FP((s),(o))) = (unsigned char)(x))
+#define pokew(s,o,x)		(*((unsigned short *) MK_FP((s),(o))) = (unsigned short)(x))
+#define pokel(s,o,x)		(*((unsigned long *) MK_FP((s),(o))) = (unsigned long)(x))
+
+
+/*------------------------------------------------------------------------------------------------------- */
 void VGA256PutPixel(void *pVideo, unsigned int x, unsigned int y, unsigned int color)
 {
 	 VGA256OFFSET(pVideo, x, y) = color;  
@@ -767,33 +776,6 @@ void VGA256WaitVRetrace(void)
 
 
 /*------------------------------------------------------------------------------------------------------- */
-//void VGA256SetPalette(const void *pal);
-#pragma aux VGA256SetPalette =\
-    "mov ecx, 256*3"\
-    "xor al, al"\
-    "mov dx, 3c8h"\
-    "out dx, al"\
-    "inc dx"\
-    "rep outsb"\
-parm[ESI]\
-modify exact[ESI EDX ECX EAX];
-
-
-
-/*------------------------------------------------------------------------------------------------------- */
-//void VGA256GetPalette(void* pal);
-#pragma aux VGA256GetPalette =\
-    "mov ecx, 256*3"\
-    "xor al, al"\
-    "mov dx, 3c7h"\
-    "out dx, al"\
-    "add dx, 2"\
-    "rep insb"\
-parm[EDI]\
-modify exact[EDI EDX ECX EAX];
-
-
-/*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeOut(void)
 {
     unsigned int x, y;
@@ -944,6 +926,26 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
 }
 
 
+/* ----------------------------------------------------------------------------------------------------------------- */
+int VGA256KbHit(void)
+{
+    return(peekw(0x40, 0x1A) - peekw(0x40, 0x1C));
+}
+
+
+/* ----------------------------------------------------------------------------------------------------------------- */
+int VGA256GetCh(void)
+{
+    union REGS r;
+
+    while (!VGA256KbHit());
+    r.h.ah = 0;
+    int386(0x16, &r, &r);
+    return((int) r.h.al);
+}
+
+
+
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256OutText(void *pVideo, char *text, unsigned int x, unsigned int y, unsigned int color)
 {
@@ -985,53 +987,3 @@ void VGA256OutText(void *pVideo, char *text, unsigned int x, unsigned int y, uns
 }
 
 
-
-/*------------------------------------------------------------------------------------------------------- */
-//void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
-#pragma aux _VGA256MemCpy0 =\
-	"cld"\
-	"push ecx"\
-	"shr ecx, 2"\
-	"draw_px_0:"\	
-	"mov eax, [esi]"\
-	"mov ebx, [edi]"\
-	"test al, al"\
-	"jz draw_px_1"\
-	"mov bl, al"\
-	"draw_px_1:"\
-	"test ah, ah"\
-	"jz draw_px_2"\
-	"mov bh, ah"\
-	"draw_px_2:"\
-	"bswap eax"\
-	"bswap ebx"\
-	"test ah, ah"\
-	"jz draw_px_3"\
-	"mov bh, ah"\
-	"draw_px_3:"\
-	"test al, al"\
-	"jz draw_px_4"\
-	"mov bl, al"\
-	"draw_px_4:"\
-    "bswap ebx"\
-	"mov [edi], ebx"\
-	"add esi, 4"\
-    "add edi, 4"\
-    "dec ecx"\
-	"jnz draw_px_0"\
-	"pop ecx"\
-	"and ecx, 3"\
-	"jz draw_px_7"\
-	"draw_px_5:"\
-	"mov al, [esi]"\
-	"test al, al"\
-	"jz draw_px_6"\
-	"mov [edi+0], al"\
-	"draw_px_6:"\
-	"inc esi"\
-	"inc edi"\
-    "dec ecx"\
-	"jnz draw_px_5"\
-	"draw_px_7:"\
-parm [EDI][ESI][ECX]\
-modify exact [EDI ESI ECX EBX EAX];

@@ -39,7 +39,7 @@ void main( int argc, char *argv[] )
 
 	VGA256OutText(VGA256_Video, "Test de prueba en VESA", 20, 20, 10);
 	VGA256PutPixel(VGA256_Video, VGA256_WIDTH/2, VGA256_HEIGHT/2, 50);
-	getch();
+	VGA256GetCh();
 	
 	VGA256LineH(VGA256_Video, 0, VGA256_HEIGHT/2, VGA256_WIDTH, 50);
 	VGA256LineV(VGA256_Video, 320, 0, VGA256_WIDTH, 100);
@@ -47,11 +47,11 @@ void main( int argc, char *argv[] )
 	VGA256FillBox(VGA256_Video, 20, 20, VGA256_WIDTH - 40, VGA256_HEIGHT - 40, 240);
 	VGA256Circle(VGA256_Video, VGA256_WIDTH / 2, VGA256_HEIGHT / 2, 200, 40);
 	VGA256Line(VGA256_Video, 0, 0, VGA256_WIDTH, VGA256_HEIGHT, 40);
-	getch();
+	VGA256GetCh();
 	
 	VGA256PutImage(VGA256_Video, gacPerin, 10, 10, 320, 200);
 	VGA256PutSprite(VGA256_Video, gacPerin, 300, 200, 320, 200);
-	getch();
+	VGA256GetCh();
 
 	VGA256ClearScreen(VGA256_Video, 0);
 	b = malloc(VGA256_WIDTH * VGA256_HEIGHT * 4);
@@ -65,7 +65,7 @@ void main( int argc, char *argv[] )
 	end_time = clock();
 
 	free(b);
-	getch();
+	VGA256GetCh();
 
 	b = malloc(VGA256_WIDTH * VGA256_HEIGHT);
 	for (i = 0; i < 100; i++)
@@ -76,12 +76,12 @@ void main( int argc, char *argv[] )
 		VGA256PutImage(VGA256_Video, b, i, 0, 320, 200);
 	}
 	free(b);
-	getch();
+	VGA256GetCh();
 
 	VGA256FadeOut();
 	
 	VGA256ClearScreen(VGA256_Video, 50);
-	getch();
+	VGA256GetCh();
 	
 	
 

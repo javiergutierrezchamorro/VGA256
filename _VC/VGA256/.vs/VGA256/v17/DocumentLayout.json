@@ -3,13 +3,13 @@
   "WorkspaceRootPath": "D:\\PROYECTOS\\VGA256\\_VC\\VGA256\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\main.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
-    },
-    {
       "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\vga256.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\vga256.h||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\main.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     }
   ],
   "DocumentGroupContainers": [
@@ -19,17 +19,17 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 0,
+          "SelectedChildIndex": 2,
           "Children": [
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 2,
               "Title": "main.c",
               "DocumentMoniker": "D:\\PROYECTOS\\VGA256\\Source\\main.c",
               "RelativeDocumentMoniker": "..\\..\\Source\\main.c",
               "ToolTip": "D:\\PROYECTOS\\VGA256\\Source\\main.c",
               "RelativeToolTip": "..\\..\\Source\\main.c",
-              "ViewState": "AQIAABIAAAAAAAAAAAAAACgAAAAAAAAA",
+              "ViewState": "AQIAABIAAAAAAAAAAAAAACkAAAAOAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
               "WhenOpened": "2024-05-12T03:38:17.185Z",
               "IsPinned": true,
@@ -37,13 +37,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 2,
+              "DocumentIndex": 1,
               "Title": "vga256.h",
               "DocumentMoniker": "D:\\PROYECTOS\\VGA256\\Source\\vga256.h",
               "RelativeDocumentMoniker": "..\\..\\Source\\vga256.h",
               "ToolTip": "D:\\PROYECTOS\\VGA256\\Source\\vga256.h",
               "RelativeToolTip": "..\\..\\Source\\vga256.h",
-              "ViewState": "AQIAAJgAAAAAAAAAAAAkwKoAAAAzAAAA",
+              "ViewState": "AQIAAG0AAAAAAAAAAAAuwJcAAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000680|",
               "WhenOpened": "2024-05-11T03:28:11.846Z",
               "IsPinned": true,
@@ -51,13 +51,13 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "vga256.c",
               "DocumentMoniker": "D:\\PROYECTOS\\VGA256\\Source\\vga256.c",
               "RelativeDocumentMoniker": "..\\..\\Source\\vga256.c",
               "ToolTip": "D:\\PROYECTOS\\VGA256\\Source\\vga256.c",
               "RelativeToolTip": "..\\..\\Source\\vga256.c",
-              "ViewState": "AQIAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+              "ViewState": "AQIAAKwDAAAAAAAAAAAwwNsDAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
               "WhenOpened": "2024-05-12T08:43:28.903Z",
               "EditorCaption": ""

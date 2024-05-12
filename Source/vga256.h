@@ -1,11 +1,11 @@
 #pragma once
 #ifndef _VGA256_H
 #define _VGA256_H
-
-#pragma pack (1)
-
 #include <i86.h>
 #include <string.h>
+
+
+#pragma pack (push, 1)
 
 #define VESA_OK           0
 #define VESA_FAIL         1
@@ -41,7 +41,6 @@
 #define MM_DirectColor            6
 #define MM_YUV                    7
 
-#pragma pack (1)
 
 #ifdef __cplusplus
 extern "C" {
@@ -114,6 +113,8 @@ struct  VBE_ModeInfoBlock
   char  reserved2[206];
 };
 
+#pragma pack (pop)
+
 void VBE_Init (void);
 void VBE_Done (void);
 void DPMI_AllocDOSMem (short int paras, struct DPMI_PTR *p);
@@ -148,6 +149,7 @@ int VBE_8BitDAC (void);
 	#define VGA256_HEIGHT (768)
 #endif
 
+
 void VGA256PutPixel(void *pVideo, unsigned int x, unsigned int y, unsigned int color);
 unsigned int VGA256GetPixel(void *pVideo, unsigned int x, unsigned int y);
 void VGA256LineH(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int color);
@@ -170,10 +172,101 @@ void VGA256Circle(void* pVideo, unsigned x, unsigned int y, unsigned int radio, 
 void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned char color);
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights);
 void VGA256OutText(void* pVideo, char* text, unsigned int x, unsigned int y, unsigned int color);
+int VGA256KbHit(void);
+int VGA256GetCh(void);
 
 
+
+
+/*------------------------------------------------------------------------------------------------------- */
 #define _VGA256Sgn(a) (a > 0 ? 1 : (a < 0 ? -1 : 0))
+
+
+
+/*------------------------------------------------------------------------------------------------------- */
+//void VGA256SetPalette(const void *pal);
+#pragma aux VGA256SetPalette =\
+    "mov ecx, 256*3"\
+    "xor al, al"\
+    "mov dx, 3c8h"\
+    "out dx, al"\
+    "inc dx"\
+    "rep outsb"\
+parm[ESI]\
+modify exact[ESI EDX ECX EAX];
+
+
+
+/*------------------------------------------------------------------------------------------------------- */
+//void VGA256GetPalette(void* pal);
+#pragma aux VGA256GetPalette =\
+    "mov ecx, 256*3"\
+    "xor al, al"\
+    "mov dx, 3c7h"\
+    "out dx, al"\
+    "add dx, 2"\
+    "rep insb"\
+parm[EDI]\
+modify exact[EDI EDX ECX EAX];
+
+
+
+/*------------------------------------------------------------------------------------------------------- */
 void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
+#pragma aux _VGA256MemCpy0 =\
+	"cld"\
+	"push ecx"\
+	"shr ecx, 2"\
+	"draw_px_0:"\	
+"mov eax, [esi]"\
+"mov ebx, [edi]"\
+"test al, al"\
+"jz draw_px_1"\
+"mov bl, al"\
+"draw_px_1:"\
+"test ah, ah"\
+"jz draw_px_2"\
+"mov bh, ah"\
+"draw_px_2:"\
+"bswap eax"\
+"bswap ebx"\
+"test ah, ah"\
+"jz draw_px_3"\
+"mov bh, ah"\
+"draw_px_3:"\
+"test al, al"\
+"jz draw_px_4"\
+"mov bl, al"\
+"draw_px_4:"\
+"bswap ebx"\
+"mov [edi], ebx"\
+"add esi, 4"\
+"add edi, 4"\
+"dec ecx"\
+"jnz draw_px_0"\
+"pop ecx"\
+"and ecx, 3"\
+"jz draw_px_7"\
+"draw_px_5:"\
+"mov al, [esi]"\
+"test al, al"\
+"jz draw_px_6"\
+"mov [edi+0], al"\
+"draw_px_6:"\
+"inc esi"\
+"inc edi"\
+"dec ecx"\
+"jnz draw_px_5"\
+"draw_px_7:"\
+parm[EDI][ESI][ECX]\
+modify exact[EDI ESI ECX EBX EAX];
+
+
+
+
+
+
+
 
 #ifdef __cplusplus
 }
