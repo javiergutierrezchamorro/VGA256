@@ -1,2 +1,4 @@
 ﻿  test.c
+D:\PROYECTOS\VGA256\Source\test.c(40,33): warning C4244: '=': conversión de 'double' a 'unsigned int'; posible pérdida de datos
+D:\PROYECTOS\VGA256\Source\test.c(41,33): warning C4244: '=': conversión de 'double' a 'unsigned int'; posible pérdida de datos
   Test.vcxproj -> D:\PROYECTOS\VGA256\_VC\Test\x64\Debug\Test.exe

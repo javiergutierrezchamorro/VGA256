@@ -5,6 +5,7 @@
 #include <math.h>
 #include <conio.h>
 #include <malloc.h>
+#include <dos.h>
 #include "vga256.h"
 
 
@@ -716,6 +717,7 @@ void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int
     }
 }
 
+
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
 {
@@ -753,6 +755,7 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
         }
     }
 }
+
 
 
 /*------------------------------------------------------------------------------------------------------- */
@@ -937,6 +940,47 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
             a += d2x;
             b += d2y;
         }
+    }
+}
+
+
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256OutText(void *pVideo, char *text, unsigned int x, unsigned int y, unsigned int color)
+{
+    unsigned int j, k;
+    unsigned char *offset = (unsigned char*)&VGA256OFFSET(pVideo, x, y);
+    unsigned char *romptr;
+    unsigned char* charset;
+    unsigned char mask = 0x80;
+    union REGPACK r;
+
+    charset = MK_FP(0xF000, 0xFA6E);
+    /*r.w.ax = 0x1130;
+    r.h.bh = 6;
+    intr(0x10, &r);
+    charset = (unsigned char *) MK_FP(r.w.es, r.w.bp);*/
+
+    romptr = charset + (*text) * 8;
+    while (*text != NULL)
+    {
+        for (j = 0; j < 8; j++)
+        {
+            mask = 0x80;
+            for (k = 0; k < 8; k++)
+            {
+                if ((*romptr & mask))
+                {
+                    *(offset + k) = color;
+                }
+                mask = (mask >> 1);
+            }
+            offset += VGA256_WIDTH;
+            romptr++;
+        }
+        x += 8;
+        text++;
+        offset = (unsigned char*)&VGA256OFFSET(pVideo, x, y);
+        romptr = charset + (*text) * 8;
     }
 }
 

@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include "VGA256.h"
 
 
@@ -14,6 +15,7 @@ void main( int argc, char *argv[] )
 	short iMode;
 	unsigned int i;
 	unsigned char *b;
+	clock_t start_time, end_time;
 
 	
 	VBE_Init();
@@ -34,7 +36,8 @@ void main( int argc, char *argv[] )
 	VGA256FadeOut();
 	VBE_SetMode (iMode, 1, 1);
 	VGA256_Video = VBE_GetVideoPtr(iMode);
-	
+
+	VGA256OutText(VGA256_Video, "Test de prueba en VESA", 20, 20, 10);
 	VGA256PutPixel(VGA256_Video, VGA256_WIDTH/2, VGA256_HEIGHT/2, 50);
 	getch();
 	
@@ -52,16 +55,15 @@ void main( int argc, char *argv[] )
 
 	VGA256ClearScreen(VGA256_Video, 0);
 	b = malloc(VGA256_WIDTH * VGA256_HEIGHT * 4);
-	for (i = 0; i < 240; i++)
-	{
-		VGA256ScaleImage(b, gacPerin, 320+i, 200+i, 320, 200);
-		VGA256PutImage(VGA256_Video, b, 0, 0, 320+i, 200+i);
-	}
-	for (i = 0; i < 400; i++)
-	{
-		VGA256ScaleImage(b, gacPerin, 640 - i, 480 - i, 320, 200);
-		VGA256PutImage(VGA256_Video, b, 0, 0, 640 - i, 480 - i);
-	}
+	
+
+	start_time = clock();
+	VGA256ScaleImage(b, gacPerin, 640, 480, 320, 200);
+	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 480);
+	VGA256ScaleImage(b, gacPerin, 160, 100, 320, 200);
+	VGA256PutImage(VGA256_Video, b, 0, 0, 160, 100);
+	end_time = clock();
+
 	free(b);
 	getch();
 
@@ -85,4 +87,7 @@ void main( int argc, char *argv[] )
 
 	VBE_SetMode (3, 0, 1);
 	VBE_Done();
+
+	printf("Execution time was %ld clocks\n", (end_time - start_time));
+
 }

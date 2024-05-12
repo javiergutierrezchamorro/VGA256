@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <math.h>
 
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights);
 
@@ -9,9 +10,17 @@ void main(int argc, char* argv[])
 {
     unsigned char* b;
     unsigned char s[] = { 1, 1, 1, 2, 2, 2, 3, 3, 3 };
+    int aiSin[900];
 
-    b = malloc(1000);
-    VGA256ScaleImage(b, s, 6, 3, 3, 3);
+    #define M_PI          3.141592653589793238462643383279502884L
+    for (unsigned int i = 0; i < 900; i++)
+    {
+        aiSin[i] = (int) sin(((double) i / 10) * (M_PI / 180));
+    }
+
+
+    b = malloc(10000);
+    //VGA256RotateImage(b, s, 320, 200, 10);
     free(b);
 }
 
@@ -19,37 +28,17 @@ void main(int argc, char* argv[])
 
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
+void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle)
 {
-    unsigned int h, w;
-    unsigned int widthrun, widthtarget;
-    unsigned int heightrun, heighttarget;
+    unsigned int x, y;
+    unsigned int nx, ny;
 
-
-    heightrun = 0;
-    heighttarget = 0;
-    for (h = 0; h < heights; h++)
+    for (y = 0; y < height; y++)
     {
-        widthrun = 0;
-        widthtarget = 0;
-        for (w = 0; w < widths; w++)
+        for (x = 0; y < width; x++)
         {
-            widthtarget += widthd;
-            while (widthrun < widthtarget)
-            {
-                *pDest = *pSource;
-                pDest++;
-                widthrun += widths;
-            }
-            pSource++;
-        }
-        
-        heighttarget += heightd;
-        while (heightrun < heighttarget)
-        {
-            memcpy(pDest, pDest - widthd, widthd);
-            pDest += widthd;
-            heightrun += heights;
+            nx = x * cos(angle) - y * sin(angle);
+            ny = x * sin(angle) + y * cos(angle);
         }
     }
 }
