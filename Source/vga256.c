@@ -9,8 +9,6 @@
 
 
 
-
-
 /*------------------------------------------------------------------------------------------------------- */
 #pragma pack (1)
 
@@ -595,12 +593,11 @@ void Mystique_SetMode (short Mode, int linear, int clear)
 
 
 #if defined(VGA256_MODE_320X200X8)
-	//#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y * VGA256_WIDTH)+x])
 	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 8) + (y << 6) + x])
-//#elif defined(VGA256_MODE_640X480X8)
-#else
-	//#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y * VGA256_WIDTH)+x])
-#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 9) + (y << 7) + x])
+#elif defined(VGA256_MODE_640X480X8)
+    #define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 9) + (y << 7) + x])
+#elif defined(VGA256_MODE_1024X768X8)
+    #define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 10) + x])
 #endif
 
 
@@ -736,8 +733,8 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
         widthtarget = 0;
         for (w = 0; w < widths; w++)
         {
-            pixel = *pSource;
             widthtarget += widthd;
+            pixel = *pSource;
             while (widthrun < widthtarget)
             {
                 *pDest = pixel;
@@ -746,7 +743,6 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
             }
             pSource++;
         }
-        widthtarget += widthd;
 
         heighttarget += heightd;
         while (heightrun < heighttarget)
@@ -755,9 +751,9 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
             pDest += widthd;
             heightrun += heights;
         }
-        pSource += widths;
     }
 }
+
 
 
 /*------------------------------------------------------------------------------------------------------- */
@@ -798,8 +794,8 @@ modify exact[EDI EDX ECX EAX];
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeOut(void)
 {
+    unsigned int x, y;
     char paleta[768];
-    int x, y;
 
     VGA256GetPalette(paleta);
 
@@ -820,8 +816,8 @@ void VGA256FadeOut(void)
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeIn(char* paleta)
 {
+    unsigned int x, y;
     char pal[768];
-    int x, y;
 
     memset(pal, 0, sizeof(pal));
     for (y = 0; y < 63; y++)
@@ -842,17 +838,23 @@ void VGA256FadeIn(char* paleta)
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeTo(char* paleta)
 {
+    unsigned int x, y;
     char pal[768];
-    int x, y;
-
+    
     VGA256GetPalette(pal);
 
     for (y = 0; y < 63; y++)
     {
         for (x = 0; x < sizeof(pal); x++)
         {
-            if (pal[x] < paleta[x]) pal[x]++;
-            if (pal[x] > paleta[x]) pal[x]--;
+            if (pal[x] < paleta[x])
+            {
+                pal[x]++;
+            }
+            if (pal[x] > paleta[x])
+            {
+                pal[x]--;
+            }
         }
         VGA256WaitVRetrace();
         VGA256SetPalette(pal);

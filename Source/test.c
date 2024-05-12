@@ -8,10 +8,10 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
 void main(int argc, char* argv[])
 {
     unsigned char* b;
-    unsigned char s[] = { 1, 1, 2, 2, 3, 3 };
+    unsigned char s[] = { 1, 1, 1, 2, 2, 2, 3, 3, 3 };
 
     b = malloc(1000);
-    VGA256ScaleImage(b, s, 12, 1, 6, 1);
+    VGA256ScaleImage(b, s, 6, 3, 3, 3);
     free(b);
 }
 
@@ -24,7 +24,6 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
     unsigned int h, w;
     unsigned int widthrun, widthtarget;
     unsigned int heightrun, heighttarget;
-    unsigned char pixel;
 
 
     heightrun = 0;
@@ -35,18 +34,16 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
         widthtarget = 0;
         for (w = 0; w < widths; w++)
         {
-            pixel = *pSource;
             widthtarget += widthd;
             while (widthrun < widthtarget)
             {
-                *pDest = pixel;
+                *pDest = *pSource;
                 pDest++;
                 widthrun += widths;
             }
             pSource++;
         }
-        widthtarget += widthd;
-
+        
         heighttarget += heightd;
         while (heightrun < heighttarget)
         {
@@ -54,6 +51,5 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
             pDest += widthd;
             heightrun += heights;
         }
-        pSource += widths;
     }
 }

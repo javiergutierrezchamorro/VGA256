@@ -1,3 +1,2 @@
 ﻿  test.c
-D:\PROYECTOS\VGA256\Source\test.c(53,13): warning C4013: 'memcpy' sin definir; se supone que extern devuelve como resultado int
   Test.vcxproj -> D:\PROYECTOS\VGA256\_VC\Test\x64\Debug\Test.exe

@@ -136,13 +136,16 @@ void VBE_SetDACWidth (char bits);
 int VBE_8BitDAC (void);
 
 /*------------------------------------------------------------------------------------------------------- */
+#define VGA256_MODE_640X480X8
 #if defined(VGA256_MODE_320X200X8)
 	#define VGA256_WIDTH (320)
 	#define VGA256_HEIGHT (200)
-//#elif defined(VGA256_MODE_640X480X8)
-#else
+#elif defined(VGA256_MODE_640X480X8)
 	#define VGA256_WIDTH (640)
 	#define VGA256_HEIGHT (480)
+#elif defined(VGA256_MODE_1024X768X8)
+	#define VGA256_WIDTH (1024)
+	#define VGA256_HEIGHT (768)
 #endif
 
 void VGA256PutPixel(void *pVideo, unsigned int x, unsigned int y, unsigned int color);

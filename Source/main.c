@@ -1,4 +1,3 @@
-#define VGA256_MODE_640X480X8
 #include "VGA256.h"
 #include "data.h"
 #include <stdio.h>
@@ -57,9 +56,16 @@ void main( int argc, char *argv[] )
 
 	VGA256ClearScreen(VGA256_Video, 0);
 	b = malloc(VGA256_WIDTH * VGA256_HEIGHT * 4);
-	memset(b, 0, VGA256_WIDTH * VGA256_HEIGHT * 4);
-	VGA256ScaleImage(b, gacPerin, 640, 480, 320, 200);
-	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 480);
+	for (i = 0; i < 240; i++)
+	{
+		VGA256ScaleImage(b, gacPerin, 320+i, 200+i, 320, 200);
+		VGA256PutImage(VGA256_Video, b, 0, 0, 320+i, 200+i);
+	}
+	for (i = 0; i < 400; i++)
+	{
+		VGA256ScaleImage(b, gacPerin, 640 - i, 480 - i, 320, 200);
+		VGA256PutImage(VGA256_Video, b, 0, 0, 640 - i, 480 - i);
+	}
 	free(b);
 	getch();
 
