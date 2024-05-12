@@ -171,6 +171,7 @@ void VGA256FadeTo(char* paleta);
 void VGA256Circle(void* pVideo, unsigned x, unsigned int y, unsigned int radio, unsigned int color);
 void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned char color);
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights);
+void VGA256FloodFill(void* pVideo, unsigned int x, unsigned int y, unsigned int new_col, unsigned int old_col);
 void VGA256OutText(void* pVideo, char* text, unsigned int x, unsigned int y, unsigned int color);
 int VGA256KbHit(void);
 int VGA256GetCh(void);

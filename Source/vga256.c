@@ -945,6 +945,22 @@ int VGA256GetCh(void)
 }
 
 
+/* ----------------------------------------------------------------------------------------------------------------- */
+void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int new_col, unsigned int old_col)
+{
+    unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, x, y);
+
+    if (*offset == (unsigned char) old_col)
+    {
+        *offset = (unsigned char) new_col;
+        VGA256FloodFill(pVideo, x + 1, y, new_col, old_col);
+        VGA256FloodFill(pVideo, x - 1, y, new_col, old_col);
+        VGA256FloodFill(pVideo, x, y + 1, new_col, old_col);
+        VGA256FloodFill(pVideo, x, y - 1, new_col, old_col);
+    }
+}
+
+
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256OutText(void *pVideo, char *text, unsigned int x, unsigned int y, unsigned int color)
