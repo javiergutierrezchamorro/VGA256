@@ -222,51 +222,79 @@ void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
 	"push ecx"\
 	"shr ecx, 2"\
 	"draw_px_0:"\	
-"mov eax, [esi]"\
-"mov ebx, [edi]"\
-"test al, al"\
-"jz draw_px_1"\
-"mov bl, al"\
-"draw_px_1:"\
-"test ah, ah"\
-"jz draw_px_2"\
-"mov bh, ah"\
-"draw_px_2:"\
-"bswap eax"\
-"bswap ebx"\
-"test ah, ah"\
-"jz draw_px_3"\
-"mov bh, ah"\
-"draw_px_3:"\
-"test al, al"\
-"jz draw_px_4"\
-"mov bl, al"\
-"draw_px_4:"\
-"bswap ebx"\
-"mov [edi], ebx"\
-"add esi, 4"\
-"add edi, 4"\
-"dec ecx"\
-"jnz draw_px_0"\
-"pop ecx"\
-"and ecx, 3"\
-"jz draw_px_7"\
-"draw_px_5:"\
-"mov al, [esi]"\
-"test al, al"\
-"jz draw_px_6"\
-"mov [edi+0], al"\
-"draw_px_6:"\
-"inc esi"\
-"inc edi"\
-"dec ecx"\
-"jnz draw_px_5"\
-"draw_px_7:"\
+    "mov eax, [esi]"\
+    "mov ebx, [edi]"\
+    "test al, al"\
+    "jz draw_px_1"\
+    "mov bl, al"\
+    "draw_px_1:"\
+    "test ah, ah"\
+    "jz draw_px_2"\
+    "mov bh, ah"\
+    "draw_px_2:"\
+    "bswap eax"\
+    "bswap ebx"\
+    "test ah, ah"\
+    "jz draw_px_3"\
+    "mov bh, ah"\
+    "draw_px_3:"\
+    "test al, al"\
+    "jz draw_px_4"\
+    "mov bl, al"\
+    "draw_px_4:"\
+    "bswap ebx"\
+    "mov [edi], ebx"\
+    "add esi, 4"\
+    "add edi, 4"\
+    "dec ecx"\
+    "jnz draw_px_0"\
+    "pop ecx"\
+    "and ecx, 3"\
+    "jz draw_px_7"\
+    "draw_px_5:"\
+    "mov al, [esi]"\
+    "test al, al"\
+    "jz draw_px_6"\
+    "mov [edi+0], al"\
+    "draw_px_6:"\
+    "inc esi"\
+    "inc edi"\
+    "dec ecx"\
+    "jnz draw_px_5"\
+    "draw_px_7:"\
 parm[EDI][ESI][ECX]\
 modify exact[EDI ESI ECX EBX EAX];
 
 
-
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256MemCpyMMX(char* Dest, char* Src, unsigned int Len);
+#pragma aux VGA256MemCpyMMX =\
+    "mov eax, ecx"\
+    "sub ecx, edi"\
+    "sub ecx, eax"\
+    "and ecx, 7"\
+    "sub eax, ecx"\
+    "jle short LEndBytes"\
+    "emms"\
+    "rep movsb"\
+    "mov ecx, eax"\
+    "and eax, 7"\
+    "shr ecx, 3"\
+    "jz	LEndBytes"\
+    "sub edi, esi"\
+    "l1:"\
+    "movq mm0, [esi]"\
+    "movq [edi+esi], mm0"\
+    "add esi,8"\
+    "dec ecx"\
+    "jnz l1"\
+    "add edi, esi"\
+    "emms"\
+    "LEndBytes:"\
+    "add ecx, eax"\
+    "rep movsb"\
+    parm[EDI][ESI][ECX]\
+    modify[EAX ECX ESI EDI];
 
 
 

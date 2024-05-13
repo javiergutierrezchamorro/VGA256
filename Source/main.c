@@ -47,12 +47,14 @@ void main( int argc, char *argv[] )
 	for (i = 0; i < 1071 - 480; i++)
 	{
 		VGA256PutScreen(VGA256_Video, b + (i * 640));
+		//VGA256MemCpyMMX(VGA256_Video, b + (i * 640), VGA256_WIDTH * VGA256_HEIGHT);
 		VGA256PutSprite(VGA256_Video, c, 0, 0, 250, 151);
 		VGA256WaitVRetrace();
 	}
 	for (i = 1071 - 480; i > 0; i--)
 	{
 		VGA256PutScreen(VGA256_Video, b + (i * 640));
+		//VGA256MemCpyMMX(VGA256_Video, b + (i * 640), VGA256_WIDTH * VGA256_HEIGHT);
 		VGA256PutSprite(VGA256_Video, c, 0, 0, 250, 151);
 		VGA256WaitVRetrace();
 	}
