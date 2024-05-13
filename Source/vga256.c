@@ -733,6 +733,24 @@ void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
 {
+    unsigned int x, y;
+    unsigned int ywidthd, yheightsheightdy;
+
+    for (y = 0; y < heightd; y++)
+    {
+        ywidthd = y * widthd;
+        yheightsheightdy = y * heights / heightd;
+        for (x = 0; x < widthd; x++)
+        {
+            //pDest[y * widthd + x] = pSource[(y * heights / heightd) * widths + (x * widths / widthd)];
+            pDest[ywidthd + x] = pSource[(yheightsheightdy) * widths + (x * widths / widthd)];
+        }
+    }
+}
+
+
+void VGA256ScaleImageKO2(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
+{
     unsigned int h, w;
     unsigned char pixel;
     unsigned int runw, runh;

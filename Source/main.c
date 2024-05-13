@@ -44,6 +44,7 @@ void main( int argc, char *argv[] )
 	VGA256LoadPCX("911.pcx", b, p);
 	VGA256LoadPCX("logo.pcx", c, NULL);
 	VGA256SetPalette(p);
+	/*
 	for (i = 0; i < 1071 - 480; i++)
 	{
 		VGA256PutScreen(VGA256_Video, b + (i * 640));
@@ -58,6 +59,13 @@ void main( int argc, char *argv[] )
 		VGA256PutSprite(VGA256_Video, c, 0, 0, 250, 151);
 		VGA256WaitVRetrace();
 	}
+	*/
+	free(c);
+	c = malloc(287 * 480);
+	VGA256ScaleImage(c, b, 287, 480, 640, 1171);
+	VGA256PutImage(VGA256_Video, c, 287, 480, 640, 1171);
+
+
 	free(p);
 	free(b);
 	VGA256GetCh();
