@@ -73,22 +73,24 @@ void main( int argc, char *argv[] )
 	VGA256FloodFill(VGA256_Video, VGA256_WIDTH / 2, VGA256_HEIGHT / 2, 10, 40);
 	VGA256Line(VGA256_Video, 0, 0, VGA256_WIDTH, VGA256_HEIGHT, 40);
 	VGA256GetCh();
-	
-	VGA256PutImage(VGA256_Video, gacPerin, 10, 10, 320, 200);
-	VGA256PutSprite(VGA256_Video, gacPerin, 300, 200, 320, 200);
+
+
+	c = malloc(320 * 200);
+	VGA256LoadPCX("perin.pcx", c, NULL);
+	VGA256PutImage(VGA256_Video, c, 10, 10, 320, 200);
+	VGA256PutSprite(VGA256_Video, c, 300, 200, 320, 200);
 	VGA256GetCh();
 
 	VGA256ClearScreen(VGA256_Video, 0);
-	b = malloc(VGA256_WIDTH * VGA256_HEIGHT * 4);
+	b = malloc(VGA256_WIDTH * VGA256_HEIGHT);
 	
 
 	start_time = clock();
-	VGA256ScaleImage(b, gacPerin, 640, 480, 320, 200);
-	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 480);
-	VGA256ScaleImage(b, gacPerin, 160, 100, 320, 200);
+	VGA256ScaleImage2x(b, c, 320, 200);
+	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 400);
+	VGA256ScaleImage05x(b, c, 320, 200);
 	VGA256PutImage(VGA256_Video, b, 0, 0, 160, 100);
 	end_time = clock();
-
 	free(b);
 	VGA256GetCh();
 
@@ -96,11 +98,12 @@ void main( int argc, char *argv[] )
 	for (i = 0; i < 100; i++)
 	{
 		VGA256GetImage(VGA256_Video, b, i, 0, 320, 200);
-		VGA256PutSprite(VGA256_Video, gacPerin, i, 0, 320, 200);
+		VGA256PutSprite(VGA256_Video, c, i, 0, 320, 200);
 		VGA256WaitVRetrace();
 		VGA256PutImage(VGA256_Video, b, i, 0, 320, 200);
 	}
 	free(b);
+	free(c);
 	VGA256GetCh();
 
 	VGA256FadeOut();

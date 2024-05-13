@@ -1,3 +1,5 @@
 ﻿  test.c
-D:\PROYECTOS\VGA256\Source\test.c(16,9): warning C4013: 'VGA256LoadPCX' sin definir; se supone que extern devuelve como resultado int
+D:\PROYECTOS\VGA256\Source\test.c(35,19): warning C4101: 'c': variable local sin referencia
+D:\PROYECTOS\VGA256\Source\test.c(53,19): warning C4101: 'c': variable local sin referencia
+D:\PROYECTOS\VGA256\Source\test.c(88,9): warning C4013: 'memcpy' sin definir; se supone que extern devuelve como resultado int
   Test.vcxproj -> D:\PROYECTOS\VGA256\_VC\Test\x64\Debug\Test.exe

@@ -771,6 +771,100 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
 
 
 /*------------------------------------------------------------------------------------------------------- */
+void VGA256ScaleImage05x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
+{
+    unsigned int h, w;
+    unsigned char c;
+
+    for (h = 0; h < heights; h += 2)
+    {
+        for (w = 0; w < widths; w += 2)
+        {
+            *pDest = *pSource;
+            pSource += 2;
+            pDest++;
+        }
+        pSource += widths;
+    }
+}
+
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256ScaleImage025x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
+{
+    unsigned int h, w;
+    unsigned char c;
+
+    for (h = 0; h < heights; h += 4)
+    {
+        for (w = 0; w < widths; w += 4)
+        {
+            *pDest = *pSource;
+            pSource += 4;
+            pDest++;
+        }
+        pSource += widths * 3;
+    }
+}
+
+
+
+
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256ScaleImage2x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
+{
+    unsigned int h, w;
+    unsigned int widthd = widths << 1;
+    unsigned short* d;
+    unsigned char c;
+
+    d = (unsigned short*)pDest;
+    for (h = 0; h < heights; h++)
+    {
+        for (w = 0; w < widths; w++)
+        {
+            c = *pSource;
+            pSource++;
+            *d = (c << 8) | c;
+            d++;
+        }
+        memcpy(d, d - widths, widthd);
+        d += widths;
+    }
+}
+
+
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256ScaleImage4x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
+{
+    unsigned int h, w;
+    unsigned int widthd = widths << 2;
+    unsigned int* d;
+    unsigned char c;
+
+    d = (unsigned int*)pDest;
+    for (h = 0; h < heights; h++)
+    {
+        for (w = 0; w < widths; w++)
+        {
+            c = *pSource;
+            pSource++;
+            *d = (c << 24) | (c << 16) | (c << 8) | c;
+            d++;
+        }
+        memcpy(d, d - widths, widthd);
+        d += widths;
+        memcpy(d, d - widths, widthd);
+        d += widths;
+        memcpy(d, d - widths, widthd);
+        d += widths;
+    }
+}
+
+
+
+
+
+/*------------------------------------------------------------------------------------------------------- */
 void VGA256WaitVRetrace(void)
 {
     while ((inp(0x03DA) & 8) != 0);
