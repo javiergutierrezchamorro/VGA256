@@ -18,7 +18,7 @@ void main(int argc, char* argv[])
         { 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd' }
     };
     unsigned char b[2][5];
-    VGA256ScaleImage05x((unsigned char *) b, (unsigned char *) image, 10, 4);
+    VGA256ScaleImage((unsigned char *) b, (unsigned char *) image, 5, 2, 10, 4);
 
     
 }
@@ -28,38 +28,59 @@ void main(int argc, char* argv[])
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
 {
-    unsigned int widthrun, widthtarget;
-    unsigned int heightrun, heighttarget;
     unsigned int h, w;
     unsigned char pixel;
+    unsigned int runw, runh;
+    unsigned int carryw, carryh;
+    div_t widthr, heightr;
 
+    heightr = div(heightd, heights);
+    widthr = div(widthd, widths); 
 
-    heightrun = heights;
-    heighttarget = 0;
+    runh = 0;
+    carryh = 0;
     for (h = 0; h < heights; h++)
     {
-        widthrun = 0;
-        widthtarget = 0;
-        for (w = 0; w < widths; w++)
+        runh += heightr.quot;
+        carryh += heightr.rem;
+        if (carryh >= heights)
         {
-            widthtarget += widthd;
-            pixel = *pSource;
-            pSource++;
-            while (widthrun < widthtarget)
+            carryh = 0;
+            runh++;
+        }
+        if (runh > 0)
+        {
+            runw = 0;
+            carryw = 0;
+            for (w = 0; w < widths; w++)
             {
-                *pDest = pixel;
-                pDest++;
-                widthrun += widths;
+                runw += widthr.quot;
+                carryw += widthr.rem;
+                if (carryw >= widths)
+                {
+                    carryw = 0;
+                    runw++;
+                }
+                pixel = *pSource;
+                pSource++;
+                while (runw > 0)
+                {
+                    *pDest = pixel;
+                    pDest++;
+                    runw--;
+                }
+            }
+            runh--;
+            while (runh > 0)
+            {
+                memcpy(pDest, pDest - widthd, widthd);
+                pDest += widthd;
+                runh--;
             }
         }
-        while (heightrun < heighttarget)
+        else
         {
-            memcpy(pDest, pDest - widthd, widthd);
-            pDest += widthd;
-            heightrun += heights;
+            pSource += widths;
         }
-        heighttarget += heightd;
-
     }
 }
-

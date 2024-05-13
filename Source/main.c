@@ -13,7 +13,7 @@ unsigned char *VGA256_Video;
 void main( int argc, char *argv[] )
 {
 	short iMode;
-	unsigned int i;
+	unsigned int i, j, k;
 	unsigned char *b, *c, *p;
 	clock_t start_time, end_time;
 
@@ -86,11 +86,15 @@ void main( int argc, char *argv[] )
 	
 
 	start_time = clock();
+	VGA256ScaleImage(b, c, 640, 480, 320, 200);
+	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 480);
+	end_time = clock();
+	VGA256GetCh();
+
 	VGA256ScaleImage2x(b, c, 320, 200);
 	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 400);
 	VGA256ScaleImage05x(b, c, 320, 200);
 	VGA256PutImage(VGA256_Video, b, 0, 0, 160, 100);
-	end_time = clock();
 	free(b);
 	VGA256GetCh();
 

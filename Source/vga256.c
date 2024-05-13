@@ -733,6 +733,66 @@ void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
 {
+    unsigned int h, w;
+    unsigned char pixel;
+    unsigned int runw, runh;
+    unsigned int carryw, carryh;
+    div_t widthr, heightr;
+
+    heightr = div(heightd, heights);
+    widthr = div(widthd, widths);
+
+    runh = 0;
+    carryh = 0;
+    for (h = 0; h < heights; h++)
+    {
+        runh += heightr.quot;
+        carryh += heightr.rem;
+        if (carryh >= heights)
+        {
+            carryh = 0;
+            runh++;
+        }
+        if (runh > 0)
+        {
+            runw = 0;
+            carryw = 0;
+            for (w = 0; w < widths; w++)
+            {
+                runw += widthr.quot;
+                carryw += widthr.rem;
+                if (carryw >= widths)
+                {
+                    carryw = 0;
+                    runw++;
+                }
+                pixel = *pSource;
+                pSource++;
+                while (runw > 0)
+                {
+                    *pDest = pixel;
+                    pDest++;
+                    runw--;
+                }
+            }
+            runh--;
+            while (runh > 0)
+            {
+                memcpy(pDest, pDest - widthd, widthd);
+                pDest += widthd;
+                runh--;
+            }
+        }
+        else
+        {
+            pSource += widths;
+        }
+    }
+}
+
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256ScaleImageKO(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
+{
     unsigned int widthrun, widthtarget;
     unsigned int heightrun, heighttarget;
     unsigned int h, w;
