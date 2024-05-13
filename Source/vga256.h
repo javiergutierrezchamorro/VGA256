@@ -173,6 +173,7 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights);
 void VGA256FloodFill(void* pVideo, unsigned int x, unsigned int y, unsigned int new_col, unsigned int old_col);
 void VGA256OutText(void* pVideo, char* text, unsigned int x, unsigned int y, unsigned int color);
+int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal);
 int VGA256KbHit(void);
 int VGA256GetCh(void);
 
@@ -180,6 +181,7 @@ int VGA256GetCh(void);
 
 
 /*------------------------------------------------------------------------------------------------------- */
+#define _VGA256ABS(a) ((a < 0) ? -a : a)
 #define _VGA256Sgn(a) (a > 0 ? 1 : (a < 0 ? -1 : 0))
 
 

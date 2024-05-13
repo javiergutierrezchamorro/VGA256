@@ -6,6 +6,9 @@
 #include <conio.h>
 #include <malloc.h>
 #include <dos.h>
+#include <io.h>
+#include <fcntl.h>
+#include <mem.h>
 #include "vga256.h"
 
 
@@ -887,7 +890,8 @@ void VGA256Circle(void* pVideo, unsigned x, unsigned int y, unsigned int radio, 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned char color)
 {
-    int i, s, d1x, d1y, d2x, d2y, u, v, m, n;
+    unsigned int i, n, m;
+    int d1x, d1y, d2x, d2y, s, u, v;
 
     u = c - a;
     v = d - b;
@@ -895,14 +899,14 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
     d1y = _VGA256Sgn(v);
     d2x = _VGA256Sgn(u);
     d2y = 0;
-    m = abs(u);
-    n = abs(v);
+    m = _VGA256ABS(u);
+    n = _VGA256ABS(v);
     if (m > n == 0)
     {
         d2x = 0;
         d2y = _VGA256Sgn(v);
-        m = abs(v);
-        n = abs(u);
+        m = _VGA256ABS(v);
+        n = _VGA256ABS(u);
     }
     s = m >> 1;
     for (i = 0; i <= m; i++)
@@ -911,14 +915,12 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
         s += n;
         if (s < m == 0)
         {
-
             s -= m;
             a += d1x;
             b += d1y;
         }
         else
         {
-
             a += d2x;
             b += d2y;
         }
@@ -972,7 +974,7 @@ void VGA256OutText(void *pVideo, char *text, unsigned int x, unsigned int y, uns
     unsigned char mask = 0x80;
     union REGPACK r;
 
-    charset = MK_FP(0xF000, 0xFA6E);
+    charset = (unsigned char *) MK_FP(0xF000, 0xFA6E);
     /*r.w.ax = 0x1130;
     r.h.bh = 6;
     intr(0x10, &r);
@@ -1000,6 +1002,126 @@ void VGA256OutText(void *pVideo, char *text, unsigned int x, unsigned int y, uns
         offset = (unsigned char*)&VGA256OFFSET(pVideo, x, y);
         romptr = charset + (*text) * 8;
     }
+}
+
+
+/*------------------------------------------------------------------------------------------------------- */
+#pragma pack (push, 1)
+struct pcx_header
+{
+    char manufacturer;
+    char version;
+    char encoding;
+    char bits_per_pixel;
+    short int  xmin, ymin;
+    short int  xmax, ymax;
+    short int  hres;
+    short int  vres;
+    char palette16[48];
+    char reserved;
+    char color_planes;
+    short int  bytes_per_line;
+    short int  palette_type;
+    char filler[58];
+};
+#pragma pack (pop)
+
+/*------------------------------------------------------------------------------------------------------- */
+int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
+{
+    #define VGA256LoadPCXBufLen (16384)
+    unsigned int i = 0;
+    unsigned int bufptr = 0;
+    unsigned int mode = 0;    /* BYTEMODE */
+    unsigned int readlen = 0;
+    int infile = -1;
+    unsigned int outbyte = 0, bytecount = 0;
+    unsigned char* buffer = NULL;
+    struct pcx_header pcx_header;
+    int res = -9;
+
+
+    if ((infile = _open(filename, O_BINARY)) == -1)
+    {
+        res = -1;   /* Cannot open */
+    }
+    else
+    {
+        readlen = _read(infile, &pcx_header, sizeof(pcx_header));
+        if ((pcx_header.manufacturer == 10) && (pcx_header.encoding == 1) && (pcx_header.bits_per_pixel == 8))
+        {
+            if (dest)
+            {
+                buffer = malloc(VGA256LoadPCXBufLen);
+                if (buffer)
+                {
+                    readlen = 0;
+                    for (i = 0; i < VGA256LoadPCXBufLen; i++)
+                    {
+                        if (mode == 0)  /* BYTEMODE */
+                        {
+                            if (bufptr >= readlen)
+                            {
+                                bufptr = 0;
+                                if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) == 0)
+                                {
+                                    break;
+                                }
+                            }
+                            outbyte = buffer[bufptr++];
+                            if (outbyte > 0xbf)
+                            {
+                                bytecount = (int)((int)outbyte & 0x3f);
+                                if (bufptr >= readlen)
+                                {
+                                    bufptr = 0;
+                                    if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) == 0)
+                                    {
+                                        break;
+                                    }
+                                }
+                                outbyte = buffer[bufptr++];
+                                if (--bytecount > 0)
+                                {
+                                    mode = 1;   /* RUNMODE */
+                                }
+                            }
+                        }
+                        else if (--bytecount == 0)
+                        {
+                            mode = 0;   /* BYTEMODE */
+                        }
+                        i++;
+                        *dest++ = outbyte;
+                    }
+                    free(buffer);
+                    res = (unsigned int)((pcx_header.xmax - pcx_header.xmin + 1) * (pcx_header.ymax - pcx_header.ymin + 1) * pcx_header.bits_per_pixel >> 3);
+                }
+                else
+                {
+                    res = -3; /* Cannot allocate */
+                }
+            }
+            if (pal)
+            {
+                _lseek(infile, -768L, SEEK_END);
+                readlen = _read(infile, pal, 3 * 256);
+                for (i = 0; i < readlen; i++)
+                {
+                    pal[i] = pal[i] >> 2;
+                }
+            }
+        }
+        else
+        {
+            res = -2;   /* Invalid PCX */
+        }
+    }
+    if (infile != -1)
+    {
+        _close(infile);
+    }
+    return(res);
 }
 
 
