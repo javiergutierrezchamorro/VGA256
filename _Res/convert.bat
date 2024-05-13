@@ -1,0 +1,1 @@
+d:\SVN\FileOptimizer\Win64\Debug\Plugins64\magick %1 -dither FloydSteinberg -remap quake1palette.png car2.pcx

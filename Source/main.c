@@ -14,7 +14,7 @@ void main( int argc, char *argv[] )
 {
 	short iMode;
 	unsigned int i;
-	unsigned char *b, *p;
+	unsigned char *b, *c, *p;
 	clock_t start_time, end_time;
 
 
@@ -38,20 +38,30 @@ void main( int argc, char *argv[] )
 	VGA256_Video = VBE_GetVideoPtr(iMode);
 
 
-	b = malloc(VGA256_WIDTH * VGA256_HEIGHT);
-	memset(b, 0, VGA256_WIDTH * VGA256_HEIGHT);
+	b = malloc(640 * 1071);
+	c = malloc(250 * 151);
 	p = malloc(768);
-	memset(p, 0, 768);
-	i = VGA256LoadPCX("car.pcx", b, p);
-	VGA256PutImage(VGA256_Video, b, 0, 0, 640, 434);
-	VGA256FadeTo(p);
+	VGA256LoadPCX("911.pcx", b, p);
+	VGA256LoadPCX("logo.pcx", c, NULL);
+	VGA256SetPalette(p);
+	for (i = 0; i < 1071 - 480; i++)
+	{
+		VGA256PutScreen(VGA256_Video, b + (i * 640));
+		VGA256PutSprite(VGA256_Video, c, 0, 0, 250, 151);
+		VGA256WaitVRetrace();
+	}
+	for (i = 1071 - 480; i > 0; i--)
+	{
+		VGA256PutScreen(VGA256_Video, b + (i * 640));
+		VGA256PutSprite(VGA256_Video, c, 0, 0, 250, 151);
+		VGA256WaitVRetrace();
+	}
 	free(p);
 	free(b);
 	VGA256GetCh();
 
 	VGA256OutText(VGA256_Video, "Test de prueba en VESA", 20, 20, 10);
 	VGA256PutPixel(VGA256_Video, VGA256_WIDTH / 2, VGA256_HEIGHT / 2, 50);
-	VGA256GetCh();
 	
 	VGA256LineH(VGA256_Video, 0, VGA256_HEIGHT/2, VGA256_WIDTH, 50);
 	VGA256LineV(VGA256_Video, 320, 0, VGA256_WIDTH, 100);

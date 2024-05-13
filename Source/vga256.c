@@ -1013,15 +1013,15 @@ struct pcx_header
     char version;
     char encoding;
     char bits_per_pixel;
-    short int  xmin, ymin;
-    short int  xmax, ymax;
-    short int  hres;
-    short int  vres;
+    short int xmin, ymin;
+    short int xmax, ymax;
+    short int hres;
+    short int vres;
     char palette16[48];
     char reserved;
     char color_planes;
-    short int  bytes_per_line;
-    short int  palette_type;
+    short int bytes_per_line;
+    short int palette_type;
     char filler[58];
 };
 #pragma pack (pop)
@@ -1033,10 +1033,11 @@ int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
     unsigned int i = 0;
     unsigned int bufptr = 0;
     unsigned int mode = 0;    /* BYTEMODE */
-    unsigned int readlen = 0;
+    int readlen = 0;
     int infile = -1;
     unsigned int outbyte = 0, bytecount = 0;
     unsigned char* buffer = NULL;
+    unsigned int imagesize = 0;
     struct pcx_header pcx_header;
     int res = -9;
 
@@ -1056,31 +1057,32 @@ int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
                 if (buffer)
                 {
                     readlen = 0;
-                    for (i = 0; i < VGA256LoadPCXBufLen; i++)
+                    imagesize = (unsigned int)((pcx_header.xmax - pcx_header.xmin + 1) * (pcx_header.ymax - pcx_header.ymin + 1) * pcx_header.bits_per_pixel >> 3);
+                    for (i = 0; i < imagesize; i++)
                     {
                         if (mode == 0)  /* BYTEMODE */
                         {
                             if (bufptr >= readlen)
                             {
                                 bufptr = 0;
-                                if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) == 0)
+                                if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) <= 0)
                                 {
                                     break;
                                 }
                             }
-                            outbyte = buffer[bufptr++];
+                            outbyte = (unsigned char) buffer[bufptr++];
                             if (outbyte > 0xbf)
                             {
-                                bytecount = (int)((int)outbyte & 0x3f);
+                                bytecount = (unsigned int)((unsigned int)outbyte & 0x3f);
                                 if (bufptr >= readlen)
                                 {
                                     bufptr = 0;
-                                    if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) == 0)
+                                    if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) <= 0)
                                     {
                                         break;
                                     }
                                 }
-                                outbyte = buffer[bufptr++];
+                                outbyte = (unsigned char) buffer[bufptr++];
                                 if (--bytecount > 0)
                                 {
                                     mode = 1;   /* RUNMODE */
@@ -1091,11 +1093,11 @@ int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
                         {
                             mode = 0;   /* BYTEMODE */
                         }
-                        i++;
-                        *dest++ = outbyte;
+                        *dest++ = (unsigned char) outbyte;
+                        //i++;
                     }
                     free(buffer);
-                    res = (unsigned int)((pcx_header.xmax - pcx_header.xmin + 1) * (pcx_header.ymax - pcx_header.ymin + 1) * pcx_header.bits_per_pixel >> 3);
+                    res = imagesize;
                 }
                 else
                 {

@@ -183,6 +183,7 @@ int VGA256GetCh(void);
 /*------------------------------------------------------------------------------------------------------- */
 #define _VGA256ABS(a) ((a < 0) ? -a : a)
 #define _VGA256Sgn(a) (a > 0 ? 1 : (a < 0 ? -1 : 0))
+#define VGA256PutScreen(pVideo,  b) (memcpy(pVideo, b, VGA256_WIDTH * VGA256_HEIGHT))
 
 
 
