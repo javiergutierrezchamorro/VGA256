@@ -1397,7 +1397,7 @@ struct pcx_header
 int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
 {
     #define VGA256LoadPCXBufLen (16384)
-    unsigned int i = 0;
+	unsigned int i;
     unsigned int bufptr = 0;
     unsigned int mode = 0;    /* BYTEMODE */
     int readlen = 0;
@@ -1416,7 +1416,7 @@ int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
     else
     {
         readlen = _read(infile, &pcx_header, sizeof(pcx_header));
-        if ((pcx_header.manufacturer == 10) && (pcx_header.encoding == 1) && (pcx_header.bits_per_pixel == 8))
+        if ((pcx_header.manufacturer == 10) && (pcx_header.bits_per_pixel == 8))
         {
             if (dest)
             {
@@ -1461,10 +1461,8 @@ int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
                             mode = 0;   /* BYTEMODE */
                         }
                         *dest++ = (unsigned char) outbyte;
-                        //i++;
                     }
                     free(buffer);
-                    res = imagesize;
                 }
                 else
                 {
@@ -1480,6 +1478,7 @@ int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
                     pal[i] = pal[i] >> 2;
                 }
             }
+			res = imagesize;
         }
         else
         {
@@ -1492,6 +1491,58 @@ int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
     }
     return(res);
 }
+
+
+/*------------------------------------------------------------------------------------------------------- */
+int VGA256DecodePCX(unsigned char *dest, unsigned char *buffer)
+{
+	unsigned int i;
+	unsigned int bufptr = 0;
+	unsigned int mode = 0;    /* BYTEMODE */
+	unsigned int outbyte = 0, bytecount = 0;
+	unsigned int imagesize = 0;
+	struct pcx_header pcx_header;
+	int res = -9;
+
+	memcpy(&pcx_header, buffer, sizeof(pcx_header));
+	if ((pcx_header.manufacturer == 10) && (pcx_header.bits_per_pixel == 8))
+	{
+		imagesize = (unsigned int)((pcx_header.xmax - pcx_header.xmin + 1) * (pcx_header.ymax - pcx_header.ymin + 1) * pcx_header.bits_per_pixel >> 3);
+		bufptr += sizeof(pcx_header);
+		for (i = 0; i < imagesize; i++)
+		{
+			if (mode == 0)  /* BYTEMODE */
+			{
+				outbyte = (unsigned char)buffer[bufptr++];
+				if (outbyte > 0xbf)
+				{
+					bytecount = (unsigned int)((unsigned int)outbyte & 0x3f);
+					outbyte = (unsigned char)buffer[bufptr++];
+					if (--bytecount > 0)
+					{
+						mode = 1;   /* RUNMODE */
+					}
+				}
+			}
+			else if (--bytecount == 0)
+			{
+				mode = 0;   /* BYTEMODE */
+			}
+			*dest++ = (unsigned char)outbyte;
+		}
+		for (i = 0; i < 768; i++)
+		{
+			(*dest++) = (unsigned char)(buffer[bufptr++] >> 2);
+		}
+		res = imagesize;
+	}
+	else
+	{
+		res = -2;   /* Invalid PCX */
+	}
+	return(res);
+}
+
 
 
 

@@ -10,7 +10,7 @@ unsigned char *VGA256_Video;
 
 void DemoPorsche(void);
 void DemoDraw(void);
-
+void DemoEnd(void);
 
 
 /*------------------------------------------------------------------------------------------------------- */
@@ -40,57 +40,17 @@ void main( int argc, char *argv[] )
 
 	VBE_SetMode(iMode, 1, 1);
 	VGA256_Video = VBE_GetVideoPtr(iMode);
-	
-	DemoPorsche();
+
+	DemoDraw();
 	VGA256GetCh();
-	
-	//DemoDraw();
+
+	//DemoPorsche();
 	//VGA256GetCh();
 
-	/*
-	logo = malloc(250 * 151);
-	rotated = malloc(640 * 480);
-	VGA256LoadPCX("logo.pcx", logo, NULL);
-	for (i = 0; i < 360; i++)
-	{
-		VGA256RotateImage(rotated, logo, 250, 151, i);
-		VGA256PutImage(VGA256_Video, rotated, 300, 200, 250, 151);
-	}
+	DemoEnd();
 
-	j = 25;
-	k = 15;
-	for (i = 0; i < 150; i++)
-	{
-		VGA256ScaleImage(rotated, logo, j, k, 250, 151);
-		VGA256PutImage(VGA256_Video, rotated, 0, 0, j, k);
-		j += 5;
-		k += 3;
-	}
-	*/
-
-	free(logo);
-	VGA256GetCh();
-
-
-	for (i = 0; i < VGA256_HEIGHT; i += 16)
-	{
-		VGA256OutText2x(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 60, i, 40, (unsigned char*)VGA256Font);
-	}
-
-	for (i = 0; i < VGA256_HEIGHT; i += 8)
-	{
-		VGA256OutText(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 160, i, 50, (unsigned char*)VGA256Font);
-	}
-
+	//VGA256FadeOut();
 	
-
-	VGA256GetCh();
-
-	//Test rotate
-
-	VGA256FadeOut();
-	
-	VGA256ClearScreen(VGA256_Video, 50);
 	VGA256GetCh();
 	
 	
@@ -103,7 +63,18 @@ void main( int argc, char *argv[] )
 /*------------------------------------------------------------------------------------------------------- */
 void DemoDraw(void)
 {
-	VGA256OutText(VGA256_Video, "Test de prueba en VESA", 20, 20, 10, (unsigned char *) VGA256Font);
+	unsigned int i;
+
+	for (i = 0; i < VGA256_HEIGHT; i += 16)
+	{
+		VGA256OutText2x(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 60, i, 40, (unsigned char*)VGA256Font);
+	}
+
+	for (i = 0; i < VGA256_HEIGHT; i += 8)
+	{
+		VGA256OutText(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 160, i, 50, (unsigned char*)VGA256Font);
+	}
+
 
 	VGA256PutPixel(VGA256_Video, VGA256_WIDTH / 2, VGA256_HEIGHT / 2, 50);
 
@@ -120,6 +91,7 @@ void DemoDraw(void)
 	VGA256FloodFill(VGA256_Video, VGA256_WIDTH / 2, VGA256_HEIGHT / 2, 10, 40);
 
 	VGA256Line(VGA256_Video, 0, 0, VGA256_WIDTH, VGA256_HEIGHT, 40);
+
 }
 
 
@@ -170,6 +142,62 @@ void DemoPorsche(void)
 	free(logo);
 	
 }
+
+
+
+/*------------------------------------------------------------------------------------------------------- */
+void DemoEnd(void)
+{
+	unsigned int i, j, k, l;
+	unsigned char *background, *background160x120, *rotated, *scaled, *pal;
+
+	background = malloc(640 * 480);
+	VGA256GetImage(VGA256_Video, background, 0, 0, 640, 480);
+
+	background160x120 = malloc(160 * 120);
+	VGA256ScaleImage025x(background160x120, background, 640, 480);
+
+	free(background);
+
+	pal = malloc(768);
+	VGA256GetPalette(pal);
+
+	rotated = malloc(160 * 120);
+	scaled = malloc(640 * 480);
+
+	j = 640;
+	k = 480;
+	for (i = 0; i < 360; i++)
+	{
+		VGA256RotateImage(rotated, background160x120, 160, 120, i);
+		VGA256ScaleImage(scaled, rotated, j, k, 160, 120);
+		VGA256ClearScreen(VGA256_Video, 0);
+		VGA256WaitVRetrace();
+		VGA256PutImage(VGA256_Video, scaled, 640 - j >> 1, 480 - j >> 1, j, k);
+		if (i & 31)
+		{
+			for (l = 0; l < 768; l++)
+			{
+				if (pal[l] > 0)
+				{
+					pal[l]--;
+				}
+			}
+			VGA256SetPalette(pal);
+		}
+		else if (i & 3)
+		{
+			j -= 4;
+			k -= 3;
+		}
+	}
+	VGA256ClearScreen(VGA256_Video, 0);
+	free(scaled);
+	free(rotated);
+	free(pal);
+}
+
+
 
 
 /*------------------------------------------------------------------------------------------------------- */
