@@ -1,4 +1,3 @@
-#pragma once
 #ifndef _VGA256_H
 #define _VGA256_H
 #include <i86.h>
@@ -136,6 +135,7 @@ short VBE_MaxBytesPerScanline (void);
 void VBE_SetDACWidth (char bits);
 int VBE_8BitDAC (void);
 
+
 /*------------------------------------------------------------------------------------------------------- */
 #define VGA256_MODE_640X480X8
 #if defined(VGA256_MODE_320X200X8)
@@ -150,6 +150,16 @@ int VBE_8BitDAC (void);
 #endif
 
 
+/*------------------------------------------------------------------------------------------------------- */
+#define VGA256PutScreen(pVideo,  b) (memcpy(pVideo, b, VGA256_WIDTH * VGA256_HEIGHT))
+#define _VGA256ABS(a) ((a < 0) ? -a : a)
+#define _VGA256Sgn(a) (a > 0 ? 1 : (a < 0 ? -1 : 0))
+
+
+/*------------------------------------------------------------------------------------------------------- */
+extern const int VGA256SinDeg[];
+extern const int VGA256CosDeg[];
+extern const unsigned char VGA256Font[];
 void VGA256PutPixel(void *pVideo, unsigned int x, unsigned int y, unsigned int color);
 unsigned int VGA256GetPixel(void *pVideo, unsigned int x, unsigned int y);
 void VGA256LineH(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int color);
@@ -160,8 +170,6 @@ void VGA256ClearScreen(void *pVideo, unsigned int color);
 void VGA256PutSprite(void *pcDest, void *pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
 void VGA256PutImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
 void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
-
-
 void VGA256WaitVRetrace(void);
 void VGA256SetPalette(const void* pal);
 void VGA256GetPalette(void* pal);
@@ -175,19 +183,13 @@ void VGA256ScaleImage025x(unsigned char* pDest, unsigned char* pSource, unsigned
 void VGA256ScaleImage05x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights);
 void VGA256ScaleImage2x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights);
 void VGA256ScaleImage4x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights);
+void VGA256ImageRotate(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle);
 void VGA256FloodFill(void* pVideo, unsigned int x, unsigned int y, unsigned int new_col, unsigned int old_col);
-void VGA256OutText(void* pVideo, char* text, unsigned int x, unsigned int y, unsigned int color);
+void VGA256OutText(void* pVideo, char* string, unsigned int x, unsigned int y, unsigned int color, unsigned char* font);
+void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font);
 int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal);
 int VGA256KbHit(void);
 int VGA256GetCh(void);
-
-
-
-
-/*------------------------------------------------------------------------------------------------------- */
-#define _VGA256ABS(a) ((a < 0) ? -a : a)
-#define _VGA256Sgn(a) (a > 0 ? 1 : (a < 0 ? -1 : 0))
-#define VGA256PutScreen(pVideo,  b) (memcpy(pVideo, b, VGA256_WIDTH * VGA256_HEIGHT))
 
 
 
@@ -299,8 +301,6 @@ void VGA256MemCpyMMX(char* Dest, char* Src, unsigned int Len);
     "rep movsb"\
     parm[EDI][ESI][ECX]\
     modify[EAX ECX ESI EDI];
-
-
 
 
 
