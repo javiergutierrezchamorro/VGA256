@@ -17,7 +17,10 @@ void DemoDraw(void);
 void main( int argc, char *argv[] )
 {
 	short iMode;
-	unsigned int i;
+	unsigned int i, j, k;
+	unsigned char* logo;
+	unsigned char* rotated;
+
 
 	VBE_Init();
 	iMode = VBE_FindMode(VGA256_WIDTH, VGA256_HEIGHT, 8);
@@ -38,18 +41,48 @@ void main( int argc, char *argv[] )
 	VBE_SetMode(iMode, 1, 1);
 	VGA256_Video = VBE_GetVideoPtr(iMode);
 	
-	//DemoPorsche();
-	//VGA256GetCh();
+	DemoPorsche();
+	VGA256GetCh();
 	
 	//DemoDraw();
 	//VGA256GetCh();
+
+	/*
+	logo = malloc(250 * 151);
+	rotated = malloc(640 * 480);
+	VGA256LoadPCX("logo.pcx", logo, NULL);
+	for (i = 0; i < 360; i++)
+	{
+		VGA256RotateImage(rotated, logo, 250, 151, i);
+		VGA256PutImage(VGA256_Video, rotated, 300, 200, 250, 151);
+	}
+
+	j = 25;
+	k = 15;
+	for (i = 0; i < 150; i++)
+	{
+		VGA256ScaleImage(rotated, logo, j, k, 250, 151);
+		VGA256PutImage(VGA256_Video, rotated, 0, 0, j, k);
+		j += 5;
+		k += 3;
+	}
+	*/
+
+	free(logo);
+	VGA256GetCh();
 
 
 	for (i = 0; i < VGA256_HEIGHT; i += 16)
 	{
 		VGA256OutText2x(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 60, i, 40, (unsigned char*)VGA256Font);
 	}
-	VGA256OutText(VGA256_Video, "Hola", 160, 150, 40, (unsigned char*)VGA256Font);
+
+	for (i = 0; i < VGA256_HEIGHT; i += 8)
+	{
+		VGA256OutText(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 160, i, 50, (unsigned char*)VGA256Font);
+	}
+
+	
 
 	VGA256GetCh();
 
@@ -93,8 +126,9 @@ void DemoDraw(void)
 /*------------------------------------------------------------------------------------------------------- */
 void DemoPorsche(void)
 {
-	unsigned int i;
-	unsigned char *porsche, *logo, *pal, *smallporsche;
+	unsigned int i, j, k;
+	unsigned char *porsche, *logo, *pal;
+	unsigned char* porsche320x240, *porsche640x480;
 
 	porsche = malloc(640 * 1071);
 	logo = malloc(250 * 151);
@@ -104,6 +138,20 @@ void DemoPorsche(void)
 	VGA256FadeIn(pal);
 	free(pal);
 
+
+	porsche640x480 = malloc(640 * 480);
+	porsche320x240 = malloc(320 * 240);
+	//VGA256ScaleImage(porsche320x240, &porsche[640*400], 160, 120, 640, 480);
+	VGA256ScaleImage025x(porsche320x240, &porsche[640 * 400], 640, 480);
+
+	for (i = 0; i < 360; i++)
+	{
+		VGA256RotateImage(porsche640x480, porsche320x240, 160, 120, i);
+		VGA256ScaleImage4x(VGA256_Video, porsche640x480, 160, 120);
+	}
+	free(porsche320x240);
+	free(porsche640x480);
+	
 	for (i = 0; i < 1071 - 480; i++)
 	{
 		VGA256PutScreen(VGA256_Video, porsche + (i * 640));
@@ -121,10 +169,6 @@ void DemoPorsche(void)
 	}
 	free(logo);
 	
-	smallporsche = malloc(287 * 480);
-	VGA256ScaleImage(smallporsche, porsche, 287, 480, 640, 1171);
-	VGA256PutImage(VGA256_Video, smallporsche, 287, 480, 640, 1171);
-	free(smallporsche);
 }
 
 

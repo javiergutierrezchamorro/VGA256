@@ -939,13 +939,47 @@ void VGA256ScaleImage4x(unsigned char* pDest, unsigned char* pSource, unsigned i
 }
 
 
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle)
+{
+	unsigned int hwidth = width >> 1;
+	unsigned int hheight = height >> 1;
+	int sinma = VGA256SinDeg[angle];
+	int cosma = VGA256CosDeg[angle];
+	int ys, ys_cosma, ys_sinma;
+	int xt, xs;
+	unsigned int x, y;
+
+	for (y = 0; y < height; y++)
+	{
+		ys = y - hheight;
+		ys_cosma = ys * cosma;
+		ys_sinma = ys * sinma;
+		for (x = 0; x < width; x++)
+		{
+			xt = x - hwidth;
+			xs = (cosma * xt - ys_sinma) >> 14;
+			xs += hwidth;
+			ys = (ys_cosma + sinma * xt) >> 14;
+			ys += hheight;
+			if ((unsigned int)xs < width && (unsigned int)ys < height)
+			{
+				pDest[y * width + x] = pSource[ys * width + xs];
+			}
+			else
+			{
+				pDest[y * width + x] = 0;
+			}
+		}
+	}
+}
 
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256ImageRotate(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle)
+void VGA256RotateImageOK(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle)
 {
-    unsigned int hwidth = width << 1;
-    unsigned int hheight = height << 1;
+	unsigned int hwidth = width >> 1;
+    unsigned int hheight = height >> 1;
     int sinma = VGA256SinDeg[angle];
     int cosma = VGA256CosDeg[angle];
     int xt, yt, xs, ys;
@@ -1175,9 +1209,8 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char *font)
 {
-	unsigned int width, height;
-	unsigned int slen, x, y;
-	unsigned int scount;
+	unsigned int x, y;
+	unsigned int scount = 0;
 	unsigned char *cptr;
 	unsigned char font_bits;
 	unsigned char bitset = 0;
@@ -1185,12 +1218,11 @@ void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned i
 
 	if (font == NULL)
 	{
-		font = (unsigned char*) MK_FP(0xF000, 0xFA6E);
+		//font = (unsigned char*) MK_FP(0xF000, 0xFA6E);
+		font = (unsigned char*)MK_FP(0xF000, 0);
 	}
 
-	slen = strlen(string);
-
-	for (scount = 0; scount < slen; scount++)
+	while (string[scount] != 0)
 	{
 		cptr = &font[string[scount] << 3];
 		for (y = 0; y < 8; y++)
@@ -1209,6 +1241,7 @@ void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned i
 			}
 		}
 		x_cursor += 8;
+		scount++;
 	}
 }
 
@@ -1216,9 +1249,8 @@ void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned i
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font)
 {
-	unsigned int width, height;
-	unsigned int slen, x, y;
-	unsigned int scount;
+	unsigned int x, y;
+	unsigned int scount = 0;
 	unsigned char* cptr;
 	unsigned char font_bits;
 	unsigned char bitset = 0;
@@ -1226,12 +1258,10 @@ void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 
 	if (font == NULL)
 	{
-		font = (unsigned char*)MK_FP(0xF000, 0xFA6E);
+		font = (unsigned char*)MK_FP(0xF000, 0);
 	}
 
-	slen = strlen(string);
-
-	for (scount = 0; scount < slen; scount++)
+	while (string[scount] != 0)
 	{
 		cptr = &font[string[scount] << 3];
 		for (y = 0; y < 8; y++)
@@ -1252,6 +1282,7 @@ void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 			}
 		}
 		x_cursor += 16;
+		scount++;
 	}
 }
 
