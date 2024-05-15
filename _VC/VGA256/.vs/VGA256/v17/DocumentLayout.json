@@ -3,10 +3,10 @@
   "WorkspaceRootPath": "D:\\PROYECTOS\\VGA256\\_VC\\VGA256\\",
   "Documents": [
     {
-      "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\main.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\vga256.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
-      "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\vga256.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
+      "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\main.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
     },
     {
       "AbsoluteMoniker": "D:0:0:{6DC0C79A-7147-40F9-87E3-409F203C2E64}|VGA256.vcxproj|D:\\PROYECTOS\\VGA256\\Source\\data.c||{D0E1A5C6-B359-4E41-9B60-3365922C2A22}"
@@ -25,7 +25,7 @@
       "DocumentGroups": [
         {
           "DockedWidth": 200,
-          "SelectedChildIndex": 3,
+          "SelectedChildIndex": 4,
           "Children": [
             {
               "$type": "Document",
@@ -66,26 +66,26 @@
             },
             {
               "$type": "Document",
-              "DocumentIndex": 0,
+              "DocumentIndex": 1,
               "Title": "main.c",
               "DocumentMoniker": "D:\\PROYECTOS\\VGA256\\Source\\main.c",
               "RelativeDocumentMoniker": "..\\..\\Source\\main.c",
               "ToolTip": "D:\\PROYECTOS\\VGA256\\Source\\main.c",
               "RelativeToolTip": "..\\..\\Source\\main.c",
-              "ViewState": "AQIAAJQAAAAAAAAAAAAAAK4AAAACAAAA",
+              "ViewState": "AQIAADwAAAAAAAAAAAAAAEYAAAACAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
               "WhenOpened": "2024-05-12T03:38:17.185Z",
               "EditorCaption": ""
             },
             {
               "$type": "Document",
-              "DocumentIndex": 1,
+              "DocumentIndex": 0,
               "Title": "vga256.c",
               "DocumentMoniker": "D:\\PROYECTOS\\VGA256\\Source\\vga256.c",
               "RelativeDocumentMoniker": "..\\..\\Source\\vga256.c",
               "ToolTip": "D:\\PROYECTOS\\VGA256\\Source\\vga256.c",
               "RelativeToolTip": "..\\..\\Source\\vga256.c",
-              "ViewState": "AQIAAOYDAAAAAAAAAAAwwBIEAAAAAAAA",
+              "ViewState": "AQIAANsEAAAAAAAAAAAuwP0EAAAAAAAA",
               "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000423|",
               "WhenOpened": "2024-05-12T08:43:28.903Z",
               "EditorCaption": ""

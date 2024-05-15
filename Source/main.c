@@ -41,13 +41,14 @@ void main( int argc, char *argv[] )
 	VBE_SetMode(iMode, 1, 1);
 	VGA256_Video = VBE_GetVideoPtr(iMode);
 
+
 	DemoDraw();
 	VGA256GetCh();
 
 	//DemoPorsche();
 	//VGA256GetCh();
 
-	DemoEnd();
+	//DemoEnd();
 
 	//VGA256FadeOut();
 	
@@ -74,7 +75,7 @@ void DemoDraw(void)
 	{
 		VGA256OutText(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 160, i, 50, (unsigned char*)VGA256Font);
 	}
-
+	VGA256GetCh();
 
 	VGA256PutPixel(VGA256_Video, VGA256_WIDTH / 2, VGA256_HEIGHT / 2, 50);
 

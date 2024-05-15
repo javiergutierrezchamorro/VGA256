@@ -1011,8 +1011,6 @@ void VGA256RotateImageOK(unsigned char* pDest, unsigned char* pSource, unsigned 
 
 
 
-
-
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256WaitVRetrace(void)
 {
@@ -1206,12 +1204,13 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 }
 
 
+
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char *font)
+void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font)
 {
 	unsigned int x, y;
 	unsigned int scount = 0;
-	unsigned char *cptr;
+	unsigned char* cptr;
 	unsigned char font_bits;
 	unsigned char bitset = 0;
 	unsigned char* offset;
@@ -1234,7 +1233,6 @@ void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned i
 				bitset = (font_bits >> (7 - (x & 7))) & 0x1;
 				if (bitset)
 				{
-					//VGA256PutPixel(pVideo, x + x_cursor, y + y_cursor, color);
 					*(offset) = color;
 				}
 				offset++;
@@ -1246,6 +1244,7 @@ void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned i
 }
 
 
+
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font)
 {
@@ -1254,13 +1253,15 @@ void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 	unsigned char* cptr;
 	unsigned char font_bits;
 	unsigned char bitset = 0;
-	unsigned char* offset;
+	unsigned short* offset;
+	unsigned short c;
 
 	if (font == NULL)
 	{
 		font = (unsigned char*)MK_FP(0xF000, 0);
 	}
 
+	c = (color << 8) | color;
 	while (string[scount] != 0)
 	{
 		cptr = &font[string[scount] << 3];
@@ -1273,12 +1274,10 @@ void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 				bitset = (font_bits >> (7 - (x & 7))) & 0x1;
 				if (bitset)
 				{
-					*(offset) = color;
-					*(offset + 1) = color;
-					*(offset + VGA256_WIDTH) = color;
-					*(offset + VGA256_WIDTH + 1) = color;
+					*(offset) = c;
+					*(offset + (VGA256_WIDTH >> 1)) = c;
 				}
-				offset += 2;
+				offset++;
 			}
 		}
 		x_cursor += 16;
