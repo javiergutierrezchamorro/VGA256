@@ -1288,6 +1288,50 @@ void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 
 
 /*------------------------------------------------------------------------------------------------------- */
+void VGA256OutText4x(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font)
+{
+	unsigned int x, y;
+	unsigned int scount = 0;
+	unsigned char* cptr;
+	unsigned char font_bits;
+	unsigned char bitset = 0;
+	unsigned int* offset;
+	unsigned int c;
+
+	if (font == NULL)
+	{
+		font = (unsigned char*)MK_FP(0xF000, 0);
+	}
+
+	c = (color << 24) | (color << 16) | (color << 8) | color;
+	while (string[scount] != 0)
+	{
+		cptr = &font[string[scount] << 3];
+		for (y = 0; y < 8; y++)
+		{
+			font_bits = cptr[y];
+			offset = &VGA256OFFSET(pVideo, x_cursor, y_cursor + (y << 2));
+			for (x = 0; x < 8; x++)
+			{
+				bitset = (font_bits >> (7 - (x & 7))) & 0x1;
+				if (bitset)
+				{
+					*(offset) = c;
+					*(offset + (VGA256_WIDTH >> 2)) = c;
+					*(offset + (VGA256_WIDTH >> 1)) = c;
+					*(offset + ((VGA256_WIDTH >> 2) * 3)) = c;
+				}
+				offset++;
+			}
+		}
+		x_cursor += 32;
+		scount++;
+	}
+}
+
+
+
+/*------------------------------------------------------------------------------------------------------- */
 void VGA256OutText2xOK(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font)
 {
 	unsigned int width, height;

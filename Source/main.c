@@ -66,6 +66,12 @@ void DemoDraw(void)
 {
 	unsigned int i;
 
+	for (i = 0; i < VGA256_HEIGHT; i += 32)
+	{
+		VGA256OutText4x(VGA256_Video, "VGA256", 150, i, 40, (unsigned char*)VGA256Font);
+	}
+	VGA256GetCh();
+
 	for (i = 0; i < VGA256_HEIGHT; i += 16)
 	{
 		VGA256OutText2x(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 60, i, 40, (unsigned char*)VGA256Font);
@@ -75,7 +81,7 @@ void DemoDraw(void)
 	{
 		VGA256OutText(VGA256_Video, "VGA256 Watcom/OpenWatcom Library", 160, i, 50, (unsigned char*)VGA256Font);
 	}
-	VGA256GetCh();
+	
 
 	VGA256PutPixel(VGA256_Video, VGA256_WIDTH / 2, VGA256_HEIGHT / 2, 50);
 
