@@ -42,6 +42,10 @@ void main( int argc, char *argv[] )
 	VGA256_Video = VBE_GetVideoPtr(iMode);
 
 
+	//Todo: Crop
+	//Rotate 180 / FlipV
+	//FlipH
+
 	DemoDraw();
 	VGA256GetCh();
 

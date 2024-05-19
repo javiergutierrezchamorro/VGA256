@@ -190,6 +190,7 @@ void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 void VGA256OutText4x(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font);
 int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal);
 int VGA256DecodePCX(unsigned char* dest, unsigned char* buffer);
+int VGA256LoadBMP(char* filename, unsigned char* dest, unsigned char* pal);
 int VGA256KbHit(void);
 int VGA256GetCh(void);
 
