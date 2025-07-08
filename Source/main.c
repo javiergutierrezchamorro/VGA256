@@ -49,12 +49,12 @@ void main( int argc, char *argv[] )
 	DemoDraw();
 	VGA256GetCh();
 
-	//DemoPorsche();
-	//VGA256GetCh();
+	DemoPorsche();
+	VGA256GetCh();
 
-	//DemoEnd();
+	DemoEnd();
 
-	//VGA256FadeOut();
+	VGA256FadeOut();
 	
 	VGA256GetCh();
 	

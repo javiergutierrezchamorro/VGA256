@@ -7,79 +7,109 @@
 
 
 
-/*------------------------------------------------------------------------------------------------------- */
-#pragma pack (push, 1)
-struct bmp_header
+void VGA256ScaleImageKO2(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
 {
-	unsigned short type;             // Magic identifier: 0x4d42
-	unsigned long size;             // File size in bytes
-	unsigned short reserved1;        // Not used
-	unsigned short reserved2;        // Not used
-	unsigned long offset;           // Offset to image data in bytes from beginning of file (54 bytes)
-	unsigned long dib_header_size;  // DIB Header size in bytes (40 bytes)
-	long width_px;         // Width of the image
-	long height_px;        // Height of image
-	unsigned short  num_planes;       // Number of color planes
-	unsigned short  bits_per_pixel;   // Bits per pixel
-	unsigned long  compression;      // Compression type
-	unsigned long  image_size_bytes; // Image size in bytes
-	long x_resolution_ppm; // Pixels per meter
-	long y_resolution_ppm; // Pixels per meter
-	unsigned long  num_colors;       // Number of colors  
-	unsigned long  important_colors; // Important colors 
+    unsigned int h, w;
+    unsigned char pixel;
+    unsigned int runw, runh;
+    unsigned int carryw, carryh;
+    div_t widthr, heightr;
 
-};
-#pragma pack (pop)
+    heightr = div(heightd, heights);
+    widthr = div(widthd, widths);
 
-
-/*------------------------------------------------------------------------------------------------------- */
-int VGA256LoadBMP(char* filename, unsigned char* dest, unsigned char* pal)
-{
-	int readlen = 0;
-	int infile = -1;
-	struct bmp_header bmp_header;
-	int res = -9;
-
-
-	if ((infile = _open(filename, O_BINARY | O_RDONLY)) == -1)
-	{
-		res = -1;   /* Cannot open */
-	}
-	else
-	{
-		readlen = _read(infile, &bmp_header, sizeof(bmp_header));
-		if ((bmp_header.type == 0x4d42) && (bmp_header.bits_per_pixel == 8) && (bmp_header.num_planes == 1) && (bmp_header.num_colors <= 256) && (bmp_header.compression == 0))
-		{
-			if (pal)
-			{
-				readlen = _read(infile, pal, 3 * 256);
-				/*
-				for (i = 0; i < readlen; i++)
-				{
-					pal[i] = pal[i] >> 2;
-				}
-				*/
-			}
-			if (dest)
-			{
-				_lseek(infile, bmp_header.offset, SEEK_SET);
-				readlen = _read(infile, dest, bmp_header.image_size_bytes);
-			}
-			res = bmp_header.image_size_bytes;
-		}
-		else
-		{
-			res = -2;   /* Invalid PCX */
-		}
-	}
-	if (infile != -1)
-	{
-		_close(infile);
-	}
-	return(res);
+    runh = 0;
+    carryh = 0;
+    for (h = 0; h < heights; h++)
+    {
+        runh += heightr.quot;
+        carryh += heightr.rem;
+        if (carryh >= heights)
+        {
+            carryh = 0;
+            runh++;
+        }
+        if (runh > 0)
+        {
+            runw = 0;
+            carryw = 0;
+            for (w = 0; w < widths; w++)
+            {
+                runw += widthr.quot;
+                carryw += widthr.rem;
+                if (carryw >= widths)
+                {
+                    carryw = 0;
+                    runw++;
+                }
+                pixel = *pSource;
+                pSource++;
+                while (runw > 0)
+                {
+                    *pDest = pixel;
+                    pDest++;
+                    runw--;
+                }
+            }
+            runh--;
+            while (runh > 0)
+            {
+                memcpy(pDest, pDest - widthd, widthd);
+                pDest += widthd;
+                runh--;
+            }
+        }
+        else
+        {
+            pSource += widths;
+        }
+    }
 }
 
+void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
+{
+    unsigned int h, w;
+    unsigned int height_accum = 0;
+    unsigned char *dest_line = pDest;
+    unsigned char *src_line;
+    unsigned int width_accum;
+    unsigned char* dst;
+    unsigned char pixel;
 
+    for (h = 0; h < heights; h++)
+    {
+        // Puntero a la línea de origen
+        src_line = pSource + h * widths;
+
+        // Escalado horizontal de una línea
+        width_accum = 0;
+        dst = dest_line;
+
+        for (w = 0; w < widths; w++)
+        {
+            pixel = src_line[w];
+            width_accum += widthd;
+
+            // Escribir pixel tantas veces como sea necesario
+            while (width_accum >= widths)
+            {
+                *dst++ = pixel;
+                width_accum -= widths;
+            }
+        }
+
+        // Calcular cuántas veces duplicar esta línea en vertical
+        height_accum += heightd;
+        while (height_accum >= heights)
+        {
+            dest_line += widthd;
+            memcpy(dest_line, dest_line - widthd, widthd);
+            height_accum -= heights;
+        }
+    }
+}
+    
+    
 /*------------------------------------------------------------------------------------------------------- */
 void main(int argc, char* argv[])
 {
@@ -90,10 +120,11 @@ void main(int argc, char* argv[])
 		{ 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 'S', 'T' },
 		{ 'U', 'V', 'W', 'X', 'Y', 'Z', 'a', 'b', 'c', 'd' }
 	};
-	unsigned char b[2][5];
+	unsigned char m[2][5];
+    unsigned char M[8][20];
 
-	unsigned char data[64000];
-	unsigned char pal[768];
-	VGA256LoadBMP("perin.bmp", data, pal);
 
+    VGA256ScaleImage(m, image, 5, 2, 10, 4);
+    //VGA256ScaleImage(M, image, 20, 8, 10, 4);
+    ;
 }
