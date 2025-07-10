@@ -226,6 +226,7 @@ modify exact[EDI EDX ECX EAX];
 
 /*------------------------------------------------------------------------------------------------------- */
 void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
+
 #pragma aux _VGA256MemCpy0 =\
 	"cld"\
 	"push ecx"\
@@ -304,7 +305,56 @@ void VGA256MemCpyMMX(char* Dest, char* Src, unsigned int Len);
     "rep movsb"\
     parm[EDI][ESI][ECX]\
     modify[EAX ECX ESI EDI];
+    
 
+/*------------------------------------------------------------------------------------------------------- */
+#pragma aux VGA256ScaleImage = \
+    "push esi"                    \
+    "push edi"                    \
+    "push ebx"                    \
+    "push ebp"                    \
+                                  \
+    "xor ebx, ebx"                /* y = 0 */ \
+"y_loop:"                         \
+    "mov eax, ebx"                \
+    "mul dword ptr [esp + 32]"    /* eax = y * heights */ \
+    "mov ecx, [esp + 28]"         /* ecx = heightd */ \
+    "xor edx, edx"                \
+    "div ecx"                     /* eax = y_src */ \
+    "mov ebp, eax"                \
+    "mov ecx, [esp + 24]"         /* ecx = widths */ \
+    "imul ebp, ecx"               /* ebp = y_src * widths */ \
+                                  \
+    "xor ecx, ecx"                /* x = 0 */ \
+"x_loop:"                         \
+    "mov eax, ecx"                \
+    "mul dword ptr [esp + 24]"    /* eax = x * widths */ \
+    "mov esi, [esp + 20]"         /* esi = widthd */ \
+    "xor edx, edx"                \
+    "div esi"                     /* eax = x_src */ \
+    "add eax, ebp"                /* eax = y_src * widths + x_src */ \
+    "mov esi, [esp + 12]"         /* esi = pSource */ \
+    "mov al, [esi + eax]"         /* carga píxel */ \
+    "mov edi, [esp + 16]"         /* edi = pDest */ \
+    "add edi, ebx"                \
+    "imul edi, [esp + 20]"        /* edi = y * widthd */ \
+    "add edi, ecx"                /* edi += x */ \
+    "mov [edi], al"               /* guarda píxel */ \
+                                  \
+    "inc ecx"                     \
+    "cmp ecx, [esp + 20]"         \
+    "jl x_loop"                   \
+                                  \
+    "inc ebx"                     \
+    "cmp ebx, [esp + 28]"         \
+    "jl y_loop"                   \
+                                  \
+    "pop ebp"                     \
+    "pop ebx"                     \
+    "pop edi"                     \
+    "pop esi"                     \
+    parm [edi] [esi] [eax] [ebx] [ecx] [edx] \
+    modify [eax ebx ecx edx esi edi ebp]
 
 
 #ifdef __cplusplus
