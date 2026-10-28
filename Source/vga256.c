@@ -1,8 +1,6 @@
 /*------------------------------------------------------------------------------------------------------- */
-#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <math.h>
 #include <conio.h>
 #include <malloc.h>
 #include <dos.h>
@@ -21,22 +19,22 @@
 
 static struct rminfo
 {
-  unsigned long EDI;
-  unsigned long ESI;
-  unsigned long EBP;
-  unsigned long reserved_by_system;
-  unsigned long EBX;
-  unsigned long EDX;
-  unsigned long ECX;
-  unsigned long EAX;
-  unsigned short flags;
-  unsigned short ES,DS,FS,GS,IP,CS,SP,SS;
+	unsigned long EDI;
+	unsigned long ESI;
+	unsigned long EBP;
+	unsigned long reserved_by_system;
+	unsigned long EBX;
+	unsigned long EDX;
+	unsigned long ECX;
+	unsigned long EAX;
+	unsigned short flags;
+	unsigned short ES,DS,FS,GS,IP,CS,SP,SS;
 } RMI;
 
- /*
-  * Structures that hold the preallocated DOS-Memory Aeras
-  * and their translated near-pointers!
-  */
+/*
+* Structures that hold the preallocated DOS-Memory Aeras
+* and their translated near-pointers!
+*/
 
 static struct DPMI_PTR VbeInfoPool = {0,0};
 static struct DPMI_PTR VbeModePool = {0,0};
@@ -44,26 +42,26 @@ static struct VBE_VbeInfoBlock  *VBE_Controller_Info_Pointer;
 static struct VBE_ModeInfoBlock *VBE_ModeInfo_Pointer;
 static void   *LastPhysicalMapping = NULL;
 /*
- * Structures, that hold the Informations needed to invoke
- * PM-Interrupts
- */
+* Structures, that hold the Informations needed to invoke
+* PM-Interrupts
+*/
 
 static union  REGS  regs;
 static struct SREGS sregs;
 
- /*
-  * Some informations 'bout the last mode which was set
-  * These informations are required to compensate some differencies
-  * between the normal and direct PM calling methods
-  */
+/*
+* Some informations 'bout the last mode which was set
+* These informations are required to compensate some differencies
+* between the normal and direct PM calling methods
+*/
 
 static signed short  vbelastbank = -1;
 static unsigned long BytesPerScanline;
 static unsigned char BitsPerPixel;
 
- /*
-  * Protected Mode Direct Call Informations
-  */
+/*
+* Protected Mode Direct Call Informations
+*/
 
 void VBE_InitPM (void);
 static void * pm_setwindowcall;
@@ -72,10 +70,10 @@ static void * pmcode = NULL;
 
 
 /*
- *  This function pointers will be initialized after you called
- *  VBE_Init. It'll be set to the realmode or protected mode call
- *  code
- */
+*  This function pointers will be initialized after you called
+*  VBE_Init. It'll be set to the realmode or protected mode call
+*  code
+*/
 
 tagSetDisplayStartType VBE_SetDisplayStart;
 tagSetBankType	VBE_SetBank;
@@ -92,129 +90,131 @@ static char   *mgabase1;       /* 16k register address space */
 
 static void PrepareRegisters (void)
 {
-  memset(&RMI,0,sizeof(RMI));
-  memset(&sregs,0,sizeof(sregs));
-  memset(&regs,0,sizeof(regs));
+	memset(&RMI,0,sizeof(RMI));
+	memset(&sregs,0,sizeof(sregs));
+	memset(&regs,0,sizeof(regs));
 }
 
 static void RMIRQ (char irq)
 {
-  memset (&regs, 0, sizeof (regs));
-  regs.w.ax =  0x0300;	      // Simulate Real-Mode interrupt
-  regs.h.bl =  irq;
-  sregs.es =   FP_SEG(&RMI);
-  regs.x.edi = FP_OFF(&RMI);
-  int386x(0x31, &regs, &regs, &sregs);
+	memset (&regs, 0, sizeof (regs));
+	regs.w.ax =  0x0300;	      // Simulate Real-Mode interrupt
+	regs.h.bl =  irq;
+	sregs.es =   FP_SEG(&RMI);
+	regs.x.edi = FP_OFF(&RMI);
+	int386x(0x31, &regs, &regs, &sregs);
 }
 
 void DPMI_AllocDOSMem (short int paras, struct DPMI_PTR *p)
 {
-  /* DPMI call 100h allocates DOS memory */
-  PrepareRegisters();
-  regs.w.ax=0x0100;
-  regs.w.bx=paras;
-  int386x( 0x31, &regs, &regs, &sregs);
-  p->segment=regs.w.ax;
-  p->selector=regs.w.dx;
+	/* DPMI call 100h allocates DOS memory */
+	PrepareRegisters();
+	regs.w.ax=0x0100;
+	regs.w.bx=paras;
+	int386x( 0x31, &regs, &regs, &sregs);
+	if (regs.x.cflag) {
+		p->segment = 0;
+		p->selector = 0;
+		return;
+	}
+	p->segment=regs.w.ax;
+	p->selector=regs.w.dx;
 }
 
 void DPMI_FreeDOSMem (struct DPMI_PTR *p)
 {
-  /* DPMI call 101h free DOS memory */
-  memset(&sregs,0,sizeof(sregs));
-  regs.w.ax=0x0101;
-  regs.w.dx=p->selector;
-  int386x( 0x31, &regs, &regs, &sregs);
+	/* DPMI call 101h free DOS memory */
+	memset(&sregs,0,sizeof(sregs));
+	regs.w.ax=0x0101;
+	regs.w.dx=p->selector;
+	int386x( 0x31, &regs, &regs, &sregs);
 }
 
 void DPMI_UNMAP_PHYSICAL (void *p)
 {
-  /* DPMI call 800h map physical memory*/
-  PrepareRegisters();
-  regs.w.ax=0x0801;
-  regs.w.bx=(unsigned short) (((unsigned long)p)>>16);
-  regs.w.cx=(unsigned short) (((unsigned long)p)&0xffff);
-  int386x( 0x31, &regs, &regs, &sregs);
+	/* DPMI call 801h unmap physical memory*/
+	PrepareRegisters();
+	regs.w.ax=0x0801;
+	regs.w.bx=(unsigned short) (((unsigned long)p)>>16);
+	regs.w.cx=(unsigned short) (((unsigned long)p)&0xffff);
+	int386x( 0x31, &regs, &regs, &sregs);
 }
 
 void * DPMI_MAP_PHYSICAL (void *p, unsigned long size)
 {
-  /* DPMI call 800h map physical memory*/
-  PrepareRegisters();
-  regs.w.ax=0x0800;
-  regs.w.bx=(unsigned short) (((unsigned long)p)>>16);
-  regs.w.cx=(unsigned short) (((unsigned long)p)&0xffff);
-  regs.w.si=(unsigned short) (((unsigned long)size)>>16);
-  regs.w.di=(unsigned short) (((unsigned long)size)&0xffff);
-  int386x( 0x31, &regs, &regs, &sregs);
-  return (void *) ((regs.w.bx << 16) + regs.w.cx);
+	/* DPMI call 800h map physical memory*/
+	PrepareRegisters();
+	regs.w.ax=0x0800;
+	regs.w.bx=(unsigned short) (((unsigned long)p)>>16);
+	regs.w.cx=(unsigned short) (((unsigned long)p)&0xffff);
+	regs.w.si=(unsigned short) (((unsigned long)size)>>16);
+	regs.w.di=(unsigned short) (((unsigned long)size)&0xffff);
+	int386x( 0x31, &regs, &regs, &sregs);
+	return (void *) (((unsigned long) regs.w.bx << 16) + regs.w.cx);
 }
 
 void VBE_Controller_Information  (struct VBE_VbeInfoBlock * a)
 {
-  memcpy (a, VBE_Controller_Info_Pointer, sizeof (struct VBE_VbeInfoBlock));
+	memcpy (a, VBE_Controller_Info_Pointer, sizeof (struct VBE_VbeInfoBlock));
 }
 
 void VBE_Mode_Information (short Mode, struct VBE_ModeInfoBlock * a)
 {
-  if ( (mga_detect) && (Mode>mga_maxmode)) {
-    Mystique_ModeInformation (Mode, a);
-    return;
-  }
-  PrepareRegisters();
-  RMI.EAX=0x00004f01;	      // Get SVGA-Mode Information
-  RMI.ECX=Mode;
-  RMI.ES=VbeModePool.segment;       // Segment of realmode data
-  RMI.EDI=0;		      // offset of realmode data
-  RMIRQ (0x10);
-  memcpy (a, VBE_ModeInfo_Pointer, sizeof (struct VBE_ModeInfoBlock));
+	if ( (mga_detect) && (Mode>mga_maxmode)) {
+		Mystique_ModeInformation (Mode, a);
+		return;
+	}
+	PrepareRegisters();
+	RMI.EAX=0x00004f01;	      // Get SVGA-Mode Information
+	RMI.ECX=Mode;
+	RMI.ES=VbeModePool.segment;       // Segment of realmode data
+	RMI.EDI=0;		      // offset of realmode data
+	RMIRQ (0x10);
+	memcpy (a, VBE_ModeInfo_Pointer, sizeof (struct VBE_ModeInfoBlock));
 }
 
 int VBE_IsModeLinear (short Mode)
 {
-  struct VBE_ModeInfoBlock a;
-  if ( Mode==0x13 ) {
-    return 1;
-  }
-  VBE_Mode_Information (Mode, &a);
-  return ((a.ModeAttributes & 128)==128);
+	struct VBE_ModeInfoBlock a;
+	if ( Mode==0x13 ) {
+		return 1;
+	}
+	VBE_Mode_Information (Mode, &a);
+	return ((a.ModeAttributes & 128)==128);
 }
 
-void asmSDS (short lowaddr, short hiaddr);
+void asmSDS (short x, short y);
 #pragma aux asmSDS = "mov ax, 0x4f07" \
-		   "xor ebx, ebx" \
-		   "call [pm_setdisplaystartcall]" \
-		   parm[cx][dx] modify [eax ebx ecx edx esi edi];
+"xor ebx, ebx" \
+"call [pm_setdisplaystartcall]" \
+parm[cx][dx] modify [eax ebx ecx edx esi edi];
 
 static void PM_SetDisplayStart (short x, short y)
 {
-  unsigned long  addr   = (y*BytesPerScanline+x);
-  unsigned short loaddr = addr & 0xffff;
-  unsigned short hiaddr = (addr>>16);
-  asmSDS(loaddr, hiaddr);
+	asmSDS(x, y);
 }
 
 void asmSB (short bnk);
 #pragma aux asmSB = "mov ax, 0x4f05" \
-		  "mov bx, 0" \
-		  "call [pm_setwindowcall]" \
-		  parm [dx] modify [eax ebx ecx edx esi edi];
+"mov bx, 0" \
+"call [pm_setwindowcall]" \
+parm [dx] modify [eax ebx ecx edx esi edi];
 
 static void PM_SetBank (short bnk)
 {
-  if ( bnk==vbelastbank ) return;
-  vbelastbank=bnk;
-  asmSB(bnk);
+	if ( bnk==vbelastbank ) return;
+	vbelastbank=bnk;
+	asmSB(bnk);
 }
 
 static void RM_SetDisplayStart (short x, short y)
 {
-  PrepareRegisters();
-  RMI.EAX=0x00004f07;
-  RMI.EBX=0;
-  RMI.ECX=x;
-  RMI.EDX=y;
-  RMIRQ (0x10);
+	PrepareRegisters();
+	RMI.EAX=0x00004f07;
+	RMI.EBX=0;
+	RMI.ECX=x;
+	RMI.EDX=y;
+	RMIRQ (0x10);
 }
 
 void setbiosmode (unsigned short c);
@@ -222,376 +222,389 @@ void setbiosmode (unsigned short c);
 
 void VBE_SetMode (short Mode, int linear, int clear)
 {
-  struct VBE_ModeInfoBlock a;
-  int rawmode;
-  /* Is it a normal textmode? if so set it directly! */
-  if ( Mode == 3 ) {
-    setbiosmode (Mode);
-    return;
-  }
-  if ( Mode == 0x13 ) {
-    setbiosmode (Mode);
-    return;
-  }
-  if ( (mga_detect) && (Mode>mga_maxmode)) {
-    Mystique_SetMode (Mode, linear, clear);
-    return;
-  }
-  rawmode = Mode & 0x01ff;
-  if ( linear) rawmode |= 1<<14;
-  if (!clear)  rawmode |= 1<<15;
-  if ( linear && clear ) {
-    /*
-     * in case of a S3 card the following bugfix prevents a system-crash
-     * when a mode with lfb+clearscreen will be set. We simulate the same
-     * behaviour doing the clearscreen without LFB and setting the LFB
-     * without clearscreen afterwards (a little bit messy...)
-     */
+	struct VBE_ModeInfoBlock a;
+	int rawmode;
+	/* Is it a normal textmode? if so set it directly! */
+	if ( Mode == 3 ) {
+		setbiosmode (Mode);
+		return;
+	}
+	if ( Mode == 0x13 ) {
+		setbiosmode (Mode);
+		return;
+	}
+	if ( (mga_detect) && (Mode>mga_maxmode)) {
+		Mystique_SetMode (Mode, linear, clear);
+		return;
+	}
+	rawmode = Mode & 0x01ff;
+	if ( linear) rawmode |= 1<<14;
+	if (!clear)  rawmode |= 1<<15;
+	if ( linear && clear ) {
+		/*
+		* in case of a S3 card the following bugfix prevents a system-crash
+		* when a mode with lfb+clearscreen will be set. We simulate the same
+		* behaviour doing the clearscreen without LFB and setting the LFB
+		* without clearscreen afterwards (a little bit messy...)
+		*/
 
-    PrepareRegisters();
-    RMI.EAX=0x00004f02;
-    RMI.EBX=Mode & 0x01ff;		  // mode without LFB but clear
-    RMIRQ (0x10);
+		PrepareRegisters();
+		RMI.EAX=0x00004f02;
+		RMI.EBX=Mode & 0x01ff;		  // mode without LFB but clear
+		RMIRQ (0x10);
 
-    PrepareRegisters();
-    RMI.EAX=0x00004f02;
-    RMI.EBX=(Mode & 0x01ff)|(1<<14)|(1<<15);  // mode with LFB but without clear
-    RMIRQ (0x10);
-  } else {
-    PrepareRegisters();
-    RMI.EAX=0x00004f02;
-    RMI.EBX=rawmode;
-    RMIRQ (0x10);
-  }
+		PrepareRegisters();
+		RMI.EAX=0x00004f02;
+		RMI.EBX=(Mode & 0x01ff)|(1<<14)|(1<<15);  // mode with LFB but without clear
+		RMIRQ (0x10);
+	} else {
+		PrepareRegisters();
+		RMI.EAX=0x00004f02;
+		RMI.EBX=rawmode;
+		RMIRQ (0x10);
+	}
+	/* Cache the info needed by PM_SetDisplayStart and VBE_SetPixelsPerScanline */
+	VBE_Mode_Information (Mode, &a);
+	BytesPerScanline = a.BytesPerScanline;
+	BitsPerPixel = a.BitsPerPixel;
+	vbelastbank = -1;
 }
 
 int VBE_Test (void)
 {
-  return (VBE_Controller_Info_Pointer->vbeVersion.hi>=0x2);
+	return (VBE_Controller_Info_Pointer->vbeVersion.hi>=0x2);
 }
 
 unsigned int VBE_VideoMemory (void)
 {
-  return (VBE_Controller_Info_Pointer->TotalMemory*1024*64);
+	return (VBE_Controller_Info_Pointer->TotalMemory*1024*64);
 }
 
 int VBE_FindMode (int xres, int yres, char bpp)
 {
-  int i;
-  struct VBE_ModeInfoBlock Info;
-  // First try to find the mode in the ControllerInfoBlock:
-  for (i=0; VBE_Controller_Info_Pointer->VideoModePtr[i]!=0xffff; i++ ) {
-    VBE_Mode_Information (VBE_Controller_Info_Pointer->VideoModePtr[i], &Info);
-    if ((xres == Info.XResolution) &&
-        (yres == Info.YResolution) &&
-        (bpp == Info.BitsPerPixel)) {
-	 return VBE_Controller_Info_Pointer->VideoModePtr[i];
-        }
-  }
-  if ( mga_detect ) {
-    return Mystique_FindMode (xres, yres, bpp);
-  }
-  return -1;
+	int i;
+	struct VBE_ModeInfoBlock Info;
+	// First try to find the mode in the ControllerInfoBlock:
+	for (i=0; VBE_Controller_Info_Pointer->VideoModePtr[i]!=0xffff; i++ ) {
+		VBE_Mode_Information (VBE_Controller_Info_Pointer->VideoModePtr[i], &Info);
+		if ((xres == Info.XResolution) &&
+		(yres == Info.YResolution) &&
+		(bpp == Info.BitsPerPixel)) {
+			return VBE_Controller_Info_Pointer->VideoModePtr[i];
+		}
+	}
+	if ( mga_detect ) {
+		return Mystique_FindMode (xres, yres, bpp);
+	}
+	return -1;
 }
 
 char * VBE_GetVideoPtr (short mode)
 {
-  void *phys;
-  struct VBE_ModeInfoBlock ModeInfo;
-  if ( mode==13 ) return (char *) 0xa0000;
-  VBE_Mode_Information (mode, &ModeInfo);
-  /* Unmap the last physical mapping (if there is one...) */
-  if ( LastPhysicalMapping ) {
-    DPMI_UNMAP_PHYSICAL (LastPhysicalMapping);
-    LastPhysicalMapping = NULL;
-  }
-  LastPhysicalMapping = DPMI_MAP_PHYSICAL ((void *) ModeInfo.PhysBasePtr,
+	struct VBE_ModeInfoBlock ModeInfo;
+	if ( mode==0x13 ) return (char *) 0xa0000;
+	VBE_Mode_Information (mode, &ModeInfo);
+	/* Unmap the last physical mapping (if there is one...) */
+	if ( LastPhysicalMapping ) {
+		DPMI_UNMAP_PHYSICAL (LastPhysicalMapping);
+		LastPhysicalMapping = NULL;
+	}
+	LastPhysicalMapping = DPMI_MAP_PHYSICAL ((void *) ModeInfo.PhysBasePtr,
 	(long)(VBE_Controller_Info_Pointer->TotalMemory)*64*1024);
-  return (char *) LastPhysicalMapping;
+	return (char *) LastPhysicalMapping;
 }
 
 void RM_SetBank (short bnk)
 {
-  if ( bnk==vbelastbank ) return;
-  PrepareRegisters();
-  RMI.EAX=0x00004f05;
-  RMI.EBX=0;
-  RMI.EDX=bnk;
-  RMIRQ (0x10);
-  vbelastbank=bnk;
+	if ( bnk==vbelastbank ) return;
+	PrepareRegisters();
+	RMI.EAX=0x00004f05;
+	RMI.EBX=0;
+	RMI.EDX=bnk;
+	RMIRQ (0x10);
+	vbelastbank=bnk;
 }
 
 short VBE_MaxBytesPerScanline (void)
 {
-  PrepareRegisters();
-  RMI.EAX=0x00004f06;
-  RMI.EBX=3;
-  RMIRQ (0x10);
-  return regs.w.bx;
+	PrepareRegisters();
+	RMI.EAX=0x00004f06;
+	RMI.EBX=3;
+	RMIRQ (0x10);
+	return (short) (RMI.EBX & 0xffff);
 }
 
 void VBE_SetPixelsPerScanline (short Pixels)
 {
-  PrepareRegisters();
-  RMI.EAX=0x00004f06;
-  RMI.EBX=0;
-  RMI.ECX=Pixels;
-  RMIRQ (0x10);
-  BytesPerScanline = (Pixels*BitsPerPixel/8);
+	PrepareRegisters();
+	RMI.EAX=0x00004f06;
+	RMI.EBX=0;
+	RMI.ECX=Pixels;
+	RMIRQ (0x10);
+	BytesPerScanline = (Pixels*BitsPerPixel/8);
 }
 
 void VBE_SetDACWidth (char bits)
 {
-  PrepareRegisters();
-  RMI.EAX=0x00004f08;
-  RMI.EBX=bits<<8;
-  RMIRQ (0x10);
+	PrepareRegisters();
+	RMI.EAX=0x00004f08;
+	RMI.EBX=bits<<8;
+	RMIRQ (0x10);
 }
 
 int VBE_8BitDAC (void)
 {
-  return (VBE_Controller_Info_Pointer->Capabilities & 1 );
+	return (VBE_Controller_Info_Pointer->Capabilities & 1 );
 }
 
 void VBE_InitPM (void)
 {
-  unsigned short *pm_pointer;
-  VBE_SetDisplayStart = RM_SetDisplayStart;
-  VBE_SetBank	= RM_SetBank;
-  PrepareRegisters();
-  RMI.EAX=0x00004f0a;
-  RMIRQ (0x10);
-  if ( (RMI.EAX) == 0x004f ) {
-    if (pmcode) free (pmcode);
-    // get some memory to copy the stuff.
-    pmcode = malloc (RMI.ECX  & 0x0000ffff);
-    pm_pointer =   (unsigned short *) (((unsigned long )RMI.ES<<4)|(RMI.EDI));
-    memcpy (pmcode, pm_pointer, (RMI.ECX  & 0x0000ffff));
-    pm_pointer = (unsigned short *) pmcode;
-    pm_setwindowcall =       (void *) (((unsigned long )RMI.ES<<4)|(RMI.EDI+pm_pointer[0]));
-    pm_setdisplaystartcall = (void *) (((unsigned long )RMI.ES<<4)|(RMI.EDI+pm_pointer[1]));
-    VBE_SetDisplayStart = PM_SetDisplayStart;
-    VBE_SetBank	= PM_SetBank;
-  }
+	unsigned short *pm_pointer;
+	VBE_SetDisplayStart = RM_SetDisplayStart;
+	VBE_SetBank	= RM_SetBank;
+	PrepareRegisters();
+	RMI.EAX=0x00004f0a;
+	RMIRQ (0x10);
+	if ( (RMI.EAX) == 0x004f ) {
+		if (pmcode) free (pmcode);
+		// copy the PM code to safe memory and call the copy, because
+		// the BIOS buffer can be reused by other VBE calls
+		pmcode = malloc (RMI.ECX  & 0x0000ffff);
+		if (pmcode == NULL) return;
+		pm_pointer =   (unsigned short *) (((unsigned long )RMI.ES<<4)|(RMI.EDI));
+		memcpy (pmcode, pm_pointer, (RMI.ECX  & 0x0000ffff));
+		pm_pointer = (unsigned short *) pmcode;
+		pm_setwindowcall =       (void *) ((char *) pmcode + pm_pointer[0]);
+		pm_setdisplaystartcall = (void *) ((char *) pmcode + pm_pointer[1]);
+		VBE_SetDisplayStart = PM_SetDisplayStart;
+		VBE_SetBank	= PM_SetBank;
+	}
 }
 
 void VBE_Init (void)
 {
-  /* Allocate the Dos Memory for Mode and Controller Information Blocks */
-  /* and translate their pointers into flat memory space	       */
-  DPMI_AllocDOSMem (512/16, &VbeInfoPool);
-  DPMI_AllocDOSMem (256/16, &VbeModePool);
-  VBE_ModeInfo_Pointer =  (struct VBE_ModeInfoBlock *) (VbeModePool.segment*16);
-  VBE_Controller_Info_Pointer = (struct VBE_VbeInfoBlock *) (VbeInfoPool.segment*16);
+	/* Allocate the Dos Memory for Mode and Controller Information Blocks */
+	/* and translate their pointers into flat memory space	       */
+	DPMI_AllocDOSMem (512/16, &VbeInfoPool);
+	DPMI_AllocDOSMem (256/16, &VbeModePool);
+	VBE_ModeInfo_Pointer =  (struct VBE_ModeInfoBlock *) (VbeModePool.segment*16);
+	VBE_Controller_Info_Pointer = (struct VBE_VbeInfoBlock *) (VbeInfoPool.segment*16);
 
-  /* Get Controller Information Block only once and copy this block on  */
-  /* all requests						 */
-  memset (VBE_Controller_Info_Pointer, 0, sizeof (struct VBE_VbeInfoBlock));
-  memcpy (VBE_Controller_Info_Pointer->vbeSignature, VBE2SIGNATURE, 4);
-  PrepareRegisters();
-  RMI.EAX=0x00004f00;	      // Get SVGA-Information
-  RMI.ES=VbeInfoPool.segment;       // Segment of realmode data
-  RMI.EDI=0;		      // offset of realmode data
-  RMIRQ (0x10);
-  // Translate the Realmode Pointers into flat-memory address space
-  VBE_Controller_Info_Pointer->OemStringPtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemStringPtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemStringPtr);
-  VBE_Controller_Info_Pointer->VideoModePtr=(unsigned short*)((((unsigned long)VBE_Controller_Info_Pointer->VideoModePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->VideoModePtr);
-  VBE_Controller_Info_Pointer->OemVendorNamePtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemVendorNamePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemVendorNamePtr);
-  VBE_Controller_Info_Pointer->OemProductNamePtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemProductNamePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemProductNamePtr);
-  VBE_Controller_Info_Pointer->OemProductRevPtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemProductRevPtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemProductRevPtr);
+	/* Get Controller Information Block only once and copy this block on  */
+	/* all requests						 */
+	memset (VBE_Controller_Info_Pointer, 0, sizeof (struct VBE_VbeInfoBlock));
+	memcpy (VBE_Controller_Info_Pointer->vbeSignature, VBE2SIGNATURE, 4);
+	PrepareRegisters();
+	RMI.EAX=0x00004f00;	      // Get SVGA-Information
+	RMI.ES=VbeInfoPool.segment;       // Segment of realmode data
+	RMI.EDI=0;		      // offset of realmode data
+	RMIRQ (0x10);
+	// Translate the Realmode Pointers into flat-memory address space
+	VBE_Controller_Info_Pointer->OemStringPtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemStringPtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemStringPtr);
+	VBE_Controller_Info_Pointer->VideoModePtr=(unsigned short*)((((unsigned long)VBE_Controller_Info_Pointer->VideoModePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->VideoModePtr);
+	VBE_Controller_Info_Pointer->OemVendorNamePtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemVendorNamePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemVendorNamePtr);
+	VBE_Controller_Info_Pointer->OemProductNamePtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemProductNamePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemProductNamePtr);
+	VBE_Controller_Info_Pointer->OemProductRevPtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemProductRevPtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemProductRevPtr);
 
-  VBE_InitPM();
+	VBE_InitPM();
 
-  Mystique_Detect ();
+	Mystique_Detect ();
 }
 
 void VBE_Done (void)
 {
-  if ( LastPhysicalMapping ) {
-    DPMI_UNMAP_PHYSICAL (LastPhysicalMapping);
-  }
-  DPMI_FreeDOSMem (&VbeModePool);
-  DPMI_FreeDOSMem (&VbeInfoPool);
-  if (pmcode) free (pmcode);
+	if ( LastPhysicalMapping ) {
+		DPMI_UNMAP_PHYSICAL (LastPhysicalMapping);
+		LastPhysicalMapping = NULL;
+	}
+	if ( mga_detect && mgabase1 ) {
+		DPMI_UNMAP_PHYSICAL ((void *) mgabase1);
+		mgabase1 = NULL;
+	}
+	vbelastbank = -1;
+	DPMI_FreeDOSMem (&VbeModePool);
+	DPMI_FreeDOSMem (&VbeInfoPool);
+	if (pmcode) free (pmcode);
 }
 
 unsigned long PCI_ReadDword (unsigned char id, short offset)
 {
-  PrepareRegisters();
-  RMI.EAX=0x0000b10a;
-  RMI.EBX=id<<3;
-  RMI.EDI=offset;
-  RMIRQ (0x1a);
-  return RMI.ECX;
+	PrepareRegisters();
+	RMI.EAX=0x0000b10a;
+	RMI.EBX=id<<3;
+	RMI.EDI=offset;
+	RMIRQ (0x1a);
+	return RMI.ECX;
 }
 
 int Mystique_Detect (void)
 {
-  int i;
-  unsigned long value;
-  /*-----------------05-25-97 04:05pm-----------------
-   * Check for the PCI BIOS extionsions
-   * --------------------------------------------------*/
-  mga_detect = 0;
-  PrepareRegisters();
-  RMI.EAX=0x0000b101;
-  RMIRQ (0x1a);
-  if (!((RMI.EDX == 0x20494350) && ((RMI.flags &1 )==0))) return 0;
+	int i;
+	unsigned long value;
+	/*-----------------05-25-97 04:05pm-----------------
+	* Check for the PCI BIOS extionsions
+	* --------------------------------------------------*/
+	mga_detect = 0;
+	PrepareRegisters();
+	RMI.EAX=0x0000b101;
+	RMIRQ (0x1a);
+	if (!((RMI.EDX == 0x20494350) && ((RMI.flags &1 )==0))) return 0;
 
-  for ( i=0; i<32; i++ )  {
-    value = PCI_ReadDword (i, 0);
-    if (( (value & 0xffff) == 0x102b ) && ((value >> 16) == 0x051a))
-    {
-      /* Matrox Mystique Detect successfull */
-      mga_detect = 1;
-      /* Get Mystique Memory Mapped IO-Area */
-      mgabase1 = (char *) DPMI_MAP_PHYSICAL((void *)(PCI_ReadDword (i, 0x10) & 0xfffffff0), 16*1024);
-      /* Scan the BIOS Mode List. Find the highest mode-number */
-      mga_maxmode = 0;
-      for (i=0; VBE_Controller_Info_Pointer->VideoModePtr[i]!=0xffff; i++ )
-        if ( VBE_Controller_Info_Pointer->VideoModePtr[i]>mga_maxmode)
-	 mga_maxmode = VBE_Controller_Info_Pointer->VideoModePtr[i];
-      mga_maxmode+=10;
-      return 1;
-    }
-  }
-  return 0;
+	for ( i=0; i<32; i++ )  {
+		value = PCI_ReadDword (i, 0);
+		if (( (value & 0xffff) == 0x102b ) && ((value >> 16) == 0x051a))
+		{
+			/* Matrox Mystique Detect successfull */
+			mga_detect = 1;
+			/* Get Mystique Memory Mapped IO-Area */
+			mgabase1 = (char *) DPMI_MAP_PHYSICAL((void *)(PCI_ReadDword (i, 0x10) & 0xfffffff0), 16*1024);
+			/* Scan the BIOS Mode List. Find the highest mode-number */
+			mga_maxmode = 0;
+			for (i=0; VBE_Controller_Info_Pointer->VideoModePtr[i]!=0xffff; i++ )
+			if ( VBE_Controller_Info_Pointer->VideoModePtr[i]>mga_maxmode)
+			mga_maxmode = VBE_Controller_Info_Pointer->VideoModePtr[i];
+			mga_maxmode+=10;
+			return 1;
+		}
+	}
+	return 0;
 }
 
 void Mystique_Zoom (int activate)
 /*-----------------05-25-97 04:06pm-----------------
- * Enable or Disable the Matrox Mystique Hardware Zoom
- * --------------------------------------------------*/
+* Enable or Disable the Matrox Mystique Hardware Zoom
+* --------------------------------------------------*/
 {
-  char val;
-  if ( activate ) {
-    // Zoom X Enable (DAC Control)
-    mgabase1[0x3c00]=0x38;
-    mgabase1[0x3c0a]=1;
-    // Zoom Y Enable (CRTCX Control)
-    mgabase1[0x1fd4]=0x09;
-    val= mgabase1[0x1fd5];
-    mgabase1[0x1fd4]=0x09;
-    mgabase1[0x1fd5]=val|128;
-  } else {
-    // Zoom X Disable (DAC Control)
-    mgabase1[0x3c00]=0x38;
-    mgabase1[0x3c0a]=0;
-    // Zoom Y Disable (CRTCX Control)
-    mgabase1[0x1fd4]=0x09;
-    val= mgabase1[0x1fd5];
-    mgabase1[0x1fd4]=0x09;
-    mgabase1[0x1fd5]=val &~128;
-  }
+	char val;
+	if ( activate ) {
+		// Zoom X Enable (DAC Control)
+		mgabase1[0x3c00]=0x38;
+		mgabase1[0x3c0a]=1;
+		// Zoom Y Enable (CRTCX Control)
+		mgabase1[0x1fd4]=0x09;
+		val= mgabase1[0x1fd5];
+		mgabase1[0x1fd4]=0x09;
+		mgabase1[0x1fd5]=val|128;
+	} else {
+		// Zoom X Disable (DAC Control)
+		mgabase1[0x3c00]=0x38;
+		mgabase1[0x3c0a]=0;
+		// Zoom Y Disable (CRTCX Control)
+		mgabase1[0x1fd4]=0x09;
+		val= mgabase1[0x1fd5];
+		mgabase1[0x1fd4]=0x09;
+		mgabase1[0x1fd5]=val &~128;
+	}
 }
 
 int Mystique_FindMode (int xres, int yres, char bpp)
 {
-  int usemode=-1;
-  if ( !mga_detect ) return -1;
-  switch ( bpp ) {
-        case 8:
-	 if ((xres==320) && (yres==240)) usemode =  mga_maxmode+1;
-	 if ((xres==400) && (yres==300)) usemode =  mga_maxmode+2;
-	 if ((xres==512) && (yres==384)) usemode =  mga_maxmode+3;
-	 break;
-        case 15:
-	 if ((xres==320) && (yres==200)) usemode =  mga_maxmode+4;
-	 if ((xres==320) && (yres==240)) usemode =  mga_maxmode+5;
-	 if ((xres==400) && (yres==300)) usemode =  mga_maxmode+6;
-	 if ((xres==512) && (yres==384)) usemode =  mga_maxmode+7;
-	 break;
-        case 16:
-	 if ((xres==320) && (yres==200)) usemode =  mga_maxmode+8;
-	 if ((xres==320) && (yres==240)) usemode =  mga_maxmode+9;
-	 if ((xres==400) && (yres==300)) usemode =  mga_maxmode+10;
-	 if ((xres==512) && (yres==384)) usemode =  mga_maxmode+11;
-	 break;
-        case 32:
-	 if ((xres==320) && (yres==200)) usemode =  mga_maxmode+12;
-	 if ((xres==320) && (yres==240)) usemode =  mga_maxmode+13;
-	 if ((xres==400) && (yres==300)) usemode =  mga_maxmode+14;
-	 if ((xres==512) && (yres==384)) usemode =  mga_maxmode+15;
-	 break;
-  }
-  return usemode;
+	int usemode=-1;
+	if ( !mga_detect ) return -1;
+	switch ( bpp ) {
+		case 8:
+		if ((xres==320) && (yres==240)) usemode =  mga_maxmode+1;
+		if ((xres==400) && (yres==300)) usemode =  mga_maxmode+2;
+		if ((xres==512) && (yres==384)) usemode =  mga_maxmode+3;
+		break;
+		case 15:
+		if ((xres==320) && (yres==200)) usemode =  mga_maxmode+4;
+		if ((xres==320) && (yres==240)) usemode =  mga_maxmode+5;
+		if ((xres==400) && (yres==300)) usemode =  mga_maxmode+6;
+		if ((xres==512) && (yres==384)) usemode =  mga_maxmode+7;
+		break;
+		case 16:
+		if ((xres==320) && (yres==200)) usemode =  mga_maxmode+8;
+		if ((xres==320) && (yres==240)) usemode =  mga_maxmode+9;
+		if ((xres==400) && (yres==300)) usemode =  mga_maxmode+10;
+		if ((xres==512) && (yres==384)) usemode =  mga_maxmode+11;
+		break;
+		case 32:
+		if ((xres==320) && (yres==200)) usemode =  mga_maxmode+12;
+		if ((xres==320) && (yres==240)) usemode =  mga_maxmode+13;
+		if ((xres==400) && (yres==300)) usemode =  mga_maxmode+14;
+		if ((xres==512) && (yres==384)) usemode =  mga_maxmode+15;
+		break;
+	}
+	return usemode;
 }
 
 int Mystique_TranslateMode (short mode)
 {
- int usemode = -1;
- if (mode == mga_maxmode+1)  usemode =   VBE_FindMode (640,480,8);
- if (mode == mga_maxmode+2)  usemode =   VBE_FindMode (800,600,8);
- if (mode == mga_maxmode+3)  usemode =   VBE_FindMode (1024,768,8);
- if (mode == mga_maxmode+4)  usemode =   VBE_FindMode (640,400,15);
- if (mode == mga_maxmode+5)  usemode =   VBE_FindMode (640,480,15);
- if (mode == mga_maxmode+6)  usemode =   VBE_FindMode (800,600,15);
- if (mode == mga_maxmode+7)  usemode =   VBE_FindMode (1024,768,15);
- if (mode == mga_maxmode+8)  usemode =   VBE_FindMode (640,400,16);
- if (mode == mga_maxmode+9)  usemode =   VBE_FindMode (640,480,16);
- if (mode == mga_maxmode+10) usemode =   VBE_FindMode (800,600,16);
- if (mode == mga_maxmode+11) usemode =   VBE_FindMode (1024,768,16);
- if (mode == mga_maxmode+12) usemode =   VBE_FindMode (640,400,32);
- if (mode == mga_maxmode+13) usemode =   VBE_FindMode (640,480,32);
- if (mode == mga_maxmode+14) usemode =   VBE_FindMode (800,600,32);
- if (mode == mga_maxmode+15) usemode =   VBE_FindMode (1024,768,32);
- return usemode;
+	int usemode = -1;
+	if (mode == mga_maxmode+1)  usemode =   VBE_FindMode (640,480,8);
+	if (mode == mga_maxmode+2)  usemode =   VBE_FindMode (800,600,8);
+	if (mode == mga_maxmode+3)  usemode =   VBE_FindMode (1024,768,8);
+	if (mode == mga_maxmode+4)  usemode =   VBE_FindMode (640,400,15);
+	if (mode == mga_maxmode+5)  usemode =   VBE_FindMode (640,480,15);
+	if (mode == mga_maxmode+6)  usemode =   VBE_FindMode (800,600,15);
+	if (mode == mga_maxmode+7)  usemode =   VBE_FindMode (1024,768,15);
+	if (mode == mga_maxmode+8)  usemode =   VBE_FindMode (640,400,16);
+	if (mode == mga_maxmode+9)  usemode =   VBE_FindMode (640,480,16);
+	if (mode == mga_maxmode+10) usemode =   VBE_FindMode (800,600,16);
+	if (mode == mga_maxmode+11) usemode =   VBE_FindMode (1024,768,16);
+	if (mode == mga_maxmode+12) usemode =   VBE_FindMode (640,400,32);
+	if (mode == mga_maxmode+13) usemode =   VBE_FindMode (640,480,32);
+	if (mode == mga_maxmode+14) usemode =   VBE_FindMode (800,600,32);
+	if (mode == mga_maxmode+15) usemode =   VBE_FindMode (1024,768,32);
+	return usemode;
 }
 
 void Mystique_ModeInformation (short Mode, struct VBE_ModeInfoBlock * a)
 {
-  int vbemode;
-  vbemode = Mystique_TranslateMode (Mode);
-  if ( vbemode!=-1 ) {
-    /* Create a faked Vesa Mode Information Block */
-    PrepareRegisters();
-    RMI.EAX=0x00004f01;
-    RMI.ECX=vbemode;
-    RMI.ES=VbeModePool.segment;
-    RMI.EDI=0;
-    RMIRQ (0x10);
-    memcpy (a, VBE_ModeInfo_Pointer, sizeof (struct VBE_ModeInfoBlock));
-    a->XResolution >>= 1;
-    a->YResolution >>= 1;
-    a->BytesPerScanline >>= 1;
-  }
+	int vbemode;
+	vbemode = Mystique_TranslateMode (Mode);
+	if ( vbemode!=-1 ) {
+		/* Create a faked Vesa Mode Information Block */
+		PrepareRegisters();
+		RMI.EAX=0x00004f01;
+		RMI.ECX=vbemode;
+		RMI.ES=VbeModePool.segment;
+		RMI.EDI=0;
+		RMIRQ (0x10);
+		memcpy (a, VBE_ModeInfo_Pointer, sizeof (struct VBE_ModeInfoBlock));
+		a->XResolution >>= 1;
+		a->YResolution >>= 1;
+		a->BytesPerScanline >>= 1;
+	}
 }
 
 void Mystique_SetBytesPerScanline (int nbytes)
 {
-  char lo, hi, val;
-  nbytes>>=4;
-  lo=nbytes&0xff;
-  hi=(nbytes>>8)&3;
-  mgabase1[0x1fd4]=0x13;
-  mgabase1[0x1fd5]=lo;
-  mgabase1[0x1fde]=0x00;
-  val = mgabase1[0x1fdf];
-  val&=0xcf; val|= (hi<<4);
-  mgabase1[0x1fde]=0x00;
-  mgabase1[0x1fdf]=val;
+	char lo, hi, val;
+	nbytes>>=4;
+	lo=nbytes&0xff;
+	hi=(nbytes>>8)&3;
+	mgabase1[0x1fd4]=0x13;
+	mgabase1[0x1fd5]=lo;
+	mgabase1[0x1fde]=0x00;
+	val = mgabase1[0x1fdf];
+	val&=0xcf; val|= (hi<<4);
+	mgabase1[0x1fde]=0x00;
+	mgabase1[0x1fdf]=val;
 }
 
 void Mystique_SetMode (short Mode, int linear, int clear)
 {
-  struct VBE_ModeInfoBlock a;
-  int rawmode;
-  if ( Mode> mga_maxmode ) {
-    rawmode = Mystique_TranslateMode (Mode & 0x01ff);
-  } else {
-    rawmode = (Mode & 0x01ff);
-  }
-  if ( linear) rawmode |= 1<<14;
-  if (!clear)  rawmode |= 1<<15;
-  PrepareRegisters();
-  RMI.EAX=0x00004f02;	      // Get SVGA-Mode Information
-  RMI.EBX=rawmode;
-  RMIRQ (0x10);
-  VBE_Mode_Information (Mode, &a);
-  BytesPerScanline = a.BytesPerScanline;
-  BitsPerPixel = a.BitsPerPixel;
-  if (Mode>mga_maxmode) Mystique_Zoom (1); else Mystique_Zoom (0);
-  Mystique_SetBytesPerScanline (a.BytesPerScanline);
+	struct VBE_ModeInfoBlock a;
+	int rawmode;
+	if ( Mode> mga_maxmode ) {
+		rawmode = Mystique_TranslateMode (Mode & 0x01ff);
+	} else {
+		rawmode = (Mode & 0x01ff);
+	}
+	if ( linear) rawmode |= 1<<14;
+	if (!clear)  rawmode |= 1<<15;
+	PrepareRegisters();
+	RMI.EAX=0x00004f02;	      // Set SVGA-Mode
+	RMI.EBX=rawmode;
+	RMIRQ (0x10);
+	vbelastbank = -1;
+	VBE_Mode_Information (Mode, &a);
+	BytesPerScanline = a.BytesPerScanline;
+	BitsPerPixel = a.BitsPerPixel;
+	if (Mode>mga_maxmode) Mystique_Zoom (1); else Mystique_Zoom (0);
+	Mystique_SetBytesPerScanline (a.BytesPerScanline);
 }
 
 
@@ -599,9 +612,9 @@ void Mystique_SetMode (short Mode, int linear, int clear)
 #if defined(VGA256_MODE_320X200X8)
 	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 8) + (y << 6) + x])
 #elif defined(VGA256_MODE_640X480X8)
-    #define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 9) + (y << 7) + x])
+	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 9) + (y << 7) + x])
 #elif defined(VGA256_MODE_1024X768X8)
-    #define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 10) + x])
+	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) pVideo)[(y << 10) + x])
 #endif
 
 
@@ -617,7 +630,7 @@ void Mystique_SetMode (short Mode, int linear, int clear)
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256PutPixel(void *pVideo, unsigned int x, unsigned int y, unsigned int color)
 {
-	 VGA256OFFSET(pVideo, x, y) = color;
+	VGA256OFFSET(pVideo, x, y) = color;
 }
 
 
@@ -641,8 +654,8 @@ void VGA256LineV(void *pVideo, unsigned int x, unsigned int y, unsigned int heig
 {
 	unsigned int h;
 	unsigned char *offset = (unsigned char *) &VGA256OFFSET(pVideo, x, y);
-	
-	
+
+
 	for (h = 0; h < height; h++)
 	{
 		*offset = color;
@@ -654,8 +667,8 @@ void VGA256LineV(void *pVideo, unsigned int x, unsigned int y, unsigned int heig
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256DrawBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color)
 {
-	VGA256LineV(pVideo, x, y, width, color);
-	VGA256LineV(pVideo, x + width, y, height, color);
+	VGA256LineV(pVideo, x, y, height + 1, color);
+	VGA256LineV(pVideo, x + width, y, height + 1, color);
 	VGA256LineH(pVideo, x, y, width + 1, color);
 	VGA256LineH(pVideo, x, y + height, width + 1, color);
 }
@@ -665,7 +678,7 @@ void VGA256DrawBox(void *pVideo, unsigned int x, unsigned int y, unsigned int wi
 void VGA256FillBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color)
 {
 	unsigned int h;
-	
+
 	for(h = 0; h < height; h++)
 	{
 		VGA256LineH(pVideo, x, y+h, width, color);
@@ -686,13 +699,13 @@ void VGA256PutSprite(void *pVideo, void *pcSource, unsigned int piX, unsigned in
 {
 	unsigned int h;
 	unsigned char *offset = (unsigned char *) &VGA256OFFSET(pVideo, piX, piY);
-	
-	
+
+
 	for(h = 0; h < piHeight; h++)
 	{
 		_VGA256MemCpy0((void *) offset, (void *) pcSource, (size_t) piWidth);
 		offset += VGA256_WIDTH;
-		(unsigned char *) pcSource += piWidth;
+		pcSource = (unsigned char *) pcSource + piWidth;
 	}
 }
 
@@ -701,135 +714,67 @@ void VGA256PutSprite(void *pVideo, void *pcSource, unsigned int piX, unsigned in
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256PutImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight)
 {
-    unsigned int h;
-    unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
+	unsigned int h;
+	unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
 
 
-    for (h = 0; h < piHeight; h++)
-    {
-        memcpy((void*) offset, (void*) pcSource, (size_t) piWidth);
-        offset += VGA256_WIDTH;
-        (unsigned char*)pcSource += piWidth;
-    }
+	for (h = 0; h < piHeight; h++)
+	{
+		memcpy((void*) offset, (void*) pcSource, (size_t) piWidth);
+		offset += VGA256_WIDTH;
+		pcSource = (unsigned char*)pcSource + piWidth;
+	}
 }
 
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight)
 {
-    unsigned int h;
-    unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
+	unsigned int h;
+	unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
 
 
-    for (h = 0; h < piHeight; h++)
-    {
-        memcpy((void*) pcSource, (void*) offset, (size_t) piWidth);
-        offset += VGA256_WIDTH;
-        (unsigned char*) pcSource += piWidth;
-    }
-}
-
-
-/*------------------------------------------------------------------------------------------------------- */
-void VGA256ScaleImageC(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
-{
-	unsigned int h, w;
-	unsigned int height_accum = 0;
-	unsigned char *dest_line = pDest;
-	unsigned char *src_line;
-	unsigned int width_accum;
-	unsigned char* dst;
-	unsigned char pixel;
-
-	for (h = 0; h < heights; h++)
+	for (h = 0; h < piHeight; h++)
 	{
-		// Puntero a la línea de origen
-		src_line = pSource + h * widths;
-
-		// Escalado horizontal de una línea
-		width_accum = 0;
-		dst = dest_line;
-
-		for (w = 0; w < widths; w++)
-		{
-			pixel = src_line[w];
-			width_accum += widthd;
-
-			// Escribir pixel tantas veces como sea necesario
-			while (width_accum >= widths)
-			{
-				*dst++ = pixel;
-				width_accum -= widths;
-			}
-		}
-		// Calcular cuántas veces duplicar esta línea en vertical
-		height_accum += heightd;
-		while (height_accum >= heights)
-		{
-			dest_line += widthd;
-			memcpy(dest_line, dest_line - widthd, widthd);
-			height_accum -= heights;
-		}
+		memcpy((void*) pcSource, (void*) offset, (size_t) piWidth);
+		offset += VGA256_WIDTH;
+		pcSource = (unsigned char*) pcSource + piWidth;
 	}
 }
-
-
-
-/*------------------------------------------------------------------------------------------------------- */
-void VGA256ScaleImageSlow(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights)
-{
-    unsigned int x, y;
-    unsigned int ywidthd, yheightsheightdy;
-
-    for (y = 0; y < heightd; y++)
-    {
-        ywidthd = y * widthd;
-        yheightsheightdy = y * heights / heightd;
-        for (x = 0; x < widthd; x++)
-        {
-			//pDest[y * widthd + x] = pSource[(y * heights / heightd) * widths + (x * widths / widthd)];
-			pDest[ywidthd + x] = pSource[(yheightsheightdy) * widths + (x * widths / widthd)];
-        }
-    }
-}
-
-
 
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage05x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
 {
-    unsigned int h, w;
-    unsigned char c;
+	unsigned int h, w;
 
-    for (h = 0; h < heights; h += 2)
-    {
-        for (w = 0; w < widths; w += 2)
-        {
-	   *pDest = *pSource;
-	   pSource += 2;
-	   pDest++;
-        }
-        pSource += widths;
-    }
+	for (h = 0; h < heights; h += 2)
+	{
+		for (w = 0; w < widths; w += 2)
+		{
+			*pDest = *pSource;
+			pSource += 2;
+			pDest++;
+		}
+		pSource += widths;
+	}
 }
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage025x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
 {
-    unsigned int h, w;
-    unsigned char c;
+	unsigned int h, w;
 
-    for (h = 0; h < heights; h += 4)
-    {
-        for (w = 0; w < widths; w += 4)
-        {
-	   *pDest = *pSource;
-	   pSource += 4;
-	   pDest++;
-        }
-        pSource += widths * 3;
-    }
+	for (h = 0; h < heights; h += 4)
+	{
+		for (w = 0; w < widths; w += 4)
+		{
+			*pDest = *pSource;
+			pSource += 4;
+			pDest++;
+		}
+		pSource += widths * 3;
+	}
 }
 
 
@@ -838,52 +783,52 @@ void VGA256ScaleImage025x(unsigned char* pDest, unsigned char* pSource, unsigned
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage2x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
 {
-    unsigned int h, w;
-    unsigned int widthd = widths << 1;
-    unsigned short* d;
-    unsigned char c;
+	unsigned int h, w;
+	unsigned int widthd = widths << 1;
+	unsigned short* d;
+	unsigned char c;
 
-    d = (unsigned short*)pDest;
-    for (h = 0; h < heights; h++)
-    {
-        for (w = 0; w < widths; w++)
-        {
-	   c = *pSource;
-	   pSource++;
-	   *d = (c << 8) | c;
-	   d++;
-        }
-        memcpy(d, d - widths, widthd);
-        d += widths;
-    }
+	d = (unsigned short*)pDest;
+	for (h = 0; h < heights; h++)
+	{
+		for (w = 0; w < widths; w++)
+		{
+			c = *pSource;
+			pSource++;
+			*d = (c << 8) | c;
+			d++;
+		}
+		memcpy(d, d - widths, widthd);
+		d += widths;
+	}
 }
 
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256ScaleImage4x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights)
 {
-    unsigned int h, w;
-    unsigned int widthd = widths << 2;
-    unsigned int* d;
-    unsigned char c;
+	unsigned int h, w;
+	unsigned int widthd = widths << 2;
+	unsigned int* d;
+	unsigned long c;
 
-    d = (unsigned int*)pDest;
-    for (h = 0; h < heights; h++)
-    {
-        for (w = 0; w < widths; w++)
-        {
-	   c = *pSource;
-	   pSource++;
-	   *d = (c << 24) | (c << 16) | (c << 8) | c;
-	   d++;
-        }
-        memcpy(d, d - widths, widthd);
-        d += widths;
-        memcpy(d, d - widths, widthd);
-        d += widths;
-        memcpy(d, d - widths, widthd);
-        d += widths;
-    }
+	d = (unsigned int*)pDest;
+	for (h = 0; h < heights; h++)
+	{
+		for (w = 0; w < widths; w++)
+		{
+			c = *pSource;
+			pSource++;
+			*d = (c << 24) | (c << 16) | (c << 8) | c;
+			d++;
+		}
+		memcpy(d, d - widths, widthd);
+		d += widths;
+		memcpy(d, d - widths, widthd);
+		d += widths;
+		memcpy(d, d - widths, widthd);
+		d += widths;
+	}
 }
 
 
@@ -893,8 +838,7 @@ void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned in
 {
 	unsigned int hwidth = width >> 1;
 	unsigned int hheight = height >> 1;
-	int sinma = VGA256SinDeg[angle];
-	int cosma = VGA256CosDeg[angle];
+	int sinma, cosma;
 	unsigned int x, y;
 	int xt, ys;
 	int xt_cosma, xt_sinma;
@@ -904,7 +848,12 @@ void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned in
 	unsigned char* pSrc;
 	unsigned int offset_dst;
 	unsigned int offset_src;
-	
+
+	angle %= 360;
+	if (angle < 0) angle += 360;
+	sinma = VGA256SinDeg[angle];
+	cosma = VGA256CosDeg[angle];
+
 	for (y = 0; y < height; y++)
 	{
 		ys = y - hheight;
@@ -941,190 +890,120 @@ void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned in
 
 
 
-void VGA256RotateImageSlow(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle)
-{
-	unsigned int hwidth = width >> 1;
-	unsigned int hheight = height >> 1;
-	int sinma = VGA256SinDeg[angle];
-	int cosma = VGA256CosDeg[angle];
-	int ys, ys_cosma, ys_sinma;
-	int xt, xs;
-	unsigned int x, y;
-
-	for (y = 0; y < height; y++)
-	{
-		ys = y - hheight;
-		ys_cosma = ys * cosma;
-		ys_sinma = ys * sinma;
-		for (x = 0; x < width; x++)
-		{
-			xt = x - hwidth;
-			xs = (cosma * xt - ys_sinma) >> 14;
-			xs += hwidth;
-			ys = (ys_cosma + sinma * xt) >> 14;
-			ys += hheight;
-			if ((unsigned int)xs < width && (unsigned int)ys < height)
-			{
-				pDest[y * width + x] = pSource[ys * width + xs];
-			}
-			else
-			{
-				pDest[y * width + x] = 0;
-			}
-		}
-	}
-}
-
-
-/*------------------------------------------------------------------------------------------------------- */
-void VGA256RotateImageOK(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle)
-{
-	unsigned int hwidth = width >> 1;
-    unsigned int hheight = height >> 1;
-    int sinma = VGA256SinDeg[angle];
-    int cosma = VGA256CosDeg[angle];
-    int xt, yt, xs, ys;
-    unsigned int x, y;
-
-    for (x = 0; x < width; x++)
-    {
-        xt = x - hwidth;
-        for (y = 0; y < height; y++)
-        {
-	   yt = y - hheight;
-	   xs = (cosma * xt - sinma * yt) >> 14;
-	   xs += hwidth;
-	   ys = (sinma * xt + cosma * yt) >> 14;
-	   ys += hheight;
-	   if (xs >= 0 && xs < (unsigned int) width && ys >= 0 && ys < (unsigned int) height)
-	   {
-	       pDest[y*width+x]=pSource[ys*width+xs];
-	   }
-	   else
-	   {
-	       pDest[y*width+x] = 0;
-	   }
-        }
-    }
-}
-
-
-
-
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256WaitVRetrace(void)
 {
-    while ((inp(0x03DA) & 8) != 0);
-    while ((inp(0x03DA) & 8) == 0);
+	while ((inp(0x03DA) & 8) != 0);
+	while ((inp(0x03DA) & 8) == 0);
 }
 
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeOut(void)
 {
-    unsigned int x, y;
-    char paleta[768];
+	unsigned int x, y;
+	unsigned char paleta[768];
 
-    VGA256GetPalette(paleta);
+	VGA256GetPalette(paleta);
 
-    for (y = 0; y < 63; y++)
-    {
-        for (x = 0; x < sizeof(paleta); x++)
-        {
-	   if (paleta[x] > 0)
-	   {
-	       paleta[x]--;
-	   }
-        }
-        VGA256WaitVRetrace();
-        VGA256SetPalette(paleta);
-    }
+	for (y = 0; y < 63; y++)
+	{
+		for (x = 0; x < sizeof(paleta); x++)
+		{
+			if (paleta[x] > 0)
+			{
+				paleta[x]--;
+			}
+		}
+		VGA256WaitVRetrace();
+		VGA256SetPalette(paleta);
+	}
 }
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256FadeIn(char* paleta)
+void VGA256FadeIn(unsigned char* paleta)
 {
-    unsigned int x, y;
-    char pal[768];
+	unsigned int x, y;
+	unsigned char pal[768];
 
-    memset(pal, 0, sizeof(pal));
-    for (y = 0; y < 63; y++)
-    {
-        for (x = 0; x < sizeof(pal); x++)
-        {
-	   if (pal[x] < paleta[x])
-	   {
-	       pal[x]++;
-	   }
-        }
-        VGA256WaitVRetrace();
-        VGA256SetPalette(pal);
-    }
-}
-
-
-/*------------------------------------------------------------------------------------------------------- */
-void VGA256FadeTo(char* paleta)
-{
-    unsigned int x, y;
-    char pal[768];
-    
-    VGA256GetPalette(pal);
-
-    for (y = 0; y < 63; y++)
-    {
-        for (x = 0; x < sizeof(pal); x++)
-        {
-	   if (pal[x] < paleta[x])
-	   {
-	       pal[x]++;
-	   }
-	   if (pal[x] > paleta[x])
-	   {
-	       pal[x]--;
-	   }
-        }
-        VGA256WaitVRetrace();
-        VGA256SetPalette(pal);
-    }
+	memset(pal, 0, sizeof(pal));
+	for (y = 0; y < 63; y++)
+	{
+		for (x = 0; x < sizeof(pal); x++)
+		{
+			if (pal[x] < paleta[x])
+			{
+				pal[x]++;
+			}
+		}
+		VGA256WaitVRetrace();
+		VGA256SetPalette(pal);
+	}
 }
 
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256Circle(void* pVideo, unsigned x, unsigned int y, unsigned int radio, unsigned int color)
+void VGA256FadeTo(unsigned char* paleta)
 {
-    unsigned int xl, yl;
+	unsigned int x, y;
+	unsigned char pal[768];
 
-    if (radio == 0)
-    {
-        VGA256PutPixel(pVideo, x, y, color);
-        return;
-    }
+	VGA256GetPalette(pal);
 
-    xl = 0;
-    yl = radio;
-    radio = radio * radio + 1;
+	for (y = 0; y < 63; y++)
+	{
+		for (x = 0; x < sizeof(pal); x++)
+		{
+			if (pal[x] < paleta[x])
+			{
+				pal[x]++;
+			}
+			if (pal[x] > paleta[x])
+			{
+				pal[x]--;
+			}
+		}
+		VGA256WaitVRetrace();
+		VGA256SetPalette(pal);
+	}
+}
 
-    while (yl != 0)
-    {
-        VGA256PutPixel(pVideo, x + xl, y + yl, color);
-        VGA256PutPixel(pVideo, x - xl, y + yl, color);
-        VGA256PutPixel(pVideo, x + xl, y - yl, color);
-        VGA256PutPixel(pVideo, x - xl, y - yl, color);
-        if (((xl * xl) + (yl * yl)) >= radio)
-        {
-	   yl--;
-        }
-        else
-        {
-	   xl++;
-        }
-    }				 // repeat ... Until Yl = 0;
-    VGA256PutPixel(pVideo, x + xl, y + yl, color);
-    VGA256PutPixel(pVideo, x - xl, y + yl, color);
-    VGA256PutPixel(pVideo, x + xl, y - yl, color);
-    VGA256PutPixel(pVideo, x - xl, y - yl, color);
+
+/*------------------------------------------------------------------------------------------------------- */
+void VGA256Circle(void* pVideo, unsigned int x, unsigned int y, unsigned int radio, unsigned int color)
+{
+	unsigned int xl, yl;
+
+	if (radio == 0)
+	{
+		VGA256PutPixel(pVideo, x, y, color);
+		return;
+	}
+
+	xl = 0;
+	yl = radio;
+	radio = radio * radio + 1;
+
+	while (yl != 0)
+	{
+		VGA256PutPixel(pVideo, x + xl, y + yl, color);
+		VGA256PutPixel(pVideo, x - xl, y + yl, color);
+		VGA256PutPixel(pVideo, x + xl, y - yl, color);
+		VGA256PutPixel(pVideo, x - xl, y - yl, color);
+		if (((xl * xl) + (yl * yl)) >= radio)
+		{
+			yl--;
+		}
+		else
+		{
+			xl++;
+		}
+	}				 // repeat ... Until Yl = 0;
+	VGA256PutPixel(pVideo, x + xl, y + yl, color);
+	VGA256PutPixel(pVideo, x - xl, y + yl, color);
+	VGA256PutPixel(pVideo, x + xl, y - yl, color);
+	VGA256PutPixel(pVideo, x - xl, y - yl, color);
 }
 
 
@@ -1132,76 +1011,170 @@ void VGA256Circle(void* pVideo, unsigned x, unsigned int y, unsigned int radio, 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned char color)
 {
-    unsigned int i, n, m;
-    int d1x, d1y, d2x, d2y, s, u, v;
+	unsigned int i, n, m;
+	int d1x, d1y, d2x, d2y, s, u, v;
 
-    u = c - a;
-    v = d - b;
-    d1x = _VGA256Sgn(u);
-    d1y = _VGA256Sgn(v);
-    d2x = _VGA256Sgn(u);
-    d2y = 0;
-    m = _VGA256ABS(u);
-    n = _VGA256ABS(v);
-    if (m > n == 0)
-    {
-        d2x = 0;
-        d2y = _VGA256Sgn(v);
-        m = _VGA256ABS(v);
-        n = _VGA256ABS(u);
-    }
-    s = m >> 1;
-    for (i = 0; i <= m; i++)
-    {
-        VGA256PutPixel(pVideo, a, b, color);
-        s += n;
-        if (s < m == 0)
-        {
-	   s -= m;
-	   a += d1x;
-	   b += d1y;
-        }
-        else
-        {
-	   a += d2x;
-	   b += d2y;
-        }
-    }
+	u = c - a;
+	v = d - b;
+	d1x = _VGA256Sgn(u);
+	d1y = _VGA256Sgn(v);
+	d2x = _VGA256Sgn(u);
+	d2y = 0;
+	m = _VGA256ABS(u);
+	n = _VGA256ABS(v);
+	if (m <= n)
+	{
+		d2x = 0;
+		d2y = _VGA256Sgn(v);
+		m = _VGA256ABS(v);
+		n = _VGA256ABS(u);
+	}
+	s = m >> 1;
+	for (i = 0; i <= m; i++)
+	{
+		VGA256PutPixel(pVideo, a, b, color);
+		s += n;
+		if (s >= m)
+		{
+			s -= m;
+			a += d1x;
+			b += d1y;
+		}
+		else
+		{
+			a += d2x;
+			b += d2y;
+		}
+	}
 }
 
 
 /* ----------------------------------------------------------------------------------------------------------------- */
+static int getch_last_extended_key = 0;
 int VGA256KbHit(void)
 {
-    return(peekw(0x40, 0x1A) - peekw(0x40, 0x1C));
+	if (getch_last_extended_key)
+	{
+		return(getch_last_extended_key);
+	}
+	else
+	{
+		return(peekw(0x40, 0x1A) - peekw(0x40, 0x1C));
+	}
 }
 
 
 /* ----------------------------------------------------------------------------------------------------------------- */
 int VGA256GetCh(void)
 {
-    union REGS r;
+	unsigned short head, scancode;
 
-    while (!VGA256KbHit());
-    r.h.ah = 0;
-    int386(0x16, &r, &r);
-    return((int) r.h.al);
+	if (getch_last_extended_key)
+	{
+		int ch = getch_last_extended_key;
+		getch_last_extended_key = 0;
+		return ch;
+	}
+	while (!kbhit())
+	{
+		//coniox_idle();
+	}
+
+	head = peekw(0x40, 0x1A);
+	scancode = peekw(0x40, head);
+	head = (head + 2 > 0x3C) ? 0x1E : head + 2;
+	pokew(0x40, 0x1A, head);
+
+	if ((scancode & 0xFF) == 0)
+	{
+		getch_last_extended_key = scancode >> 8;
+		return 0;
+	}
+
+	return scancode & 0xFF;
 }
 
 
 /* ----------------------------------------------------------------------------------------------------------------- */
+static int VGA256FloodPush(unsigned long** ppila, unsigned int* psp, unsigned int* pcap, unsigned long seed)
+{
+	unsigned long* npila;
+
+	if (*psp == *pcap)
+	{
+		npila = (unsigned long*) realloc(*ppila, ((*pcap) << 1) * sizeof(unsigned long));
+		if (npila == NULL) return 0;
+		*ppila = npila;
+		*pcap <<= 1;
+	}
+	(*ppila)[*psp] = seed;
+	(*psp)++;
+	return 1;
+}
+
 void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int new_col, unsigned int old_col)
 {
-    unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, x, y);
+	unsigned char* video = (unsigned char*) pVideo;
+	unsigned long* pila = NULL;
+	unsigned long seed;
+	unsigned int sp = 0, cap = 256;
+	unsigned int sx, sy, xl, xr, nx;
 
-    if (*offset == (unsigned char) old_col)
-    {
-        *offset = (unsigned char) new_col;
-        VGA256FloodFill(pVideo, x + 1, y, new_col, old_col);
-        VGA256FloodFill(pVideo, x - 1, y, new_col, old_col);
-        VGA256FloodFill(pVideo, x, y + 1, new_col, old_col);
-        VGA256FloodFill(pVideo, x, y - 1, new_col, old_col);
-    }
+	if (new_col == old_col) return;
+	if (x >= VGA256_WIDTH || y >= VGA256_HEIGHT) return;
+	if (video[y * VGA256_WIDTH + x] != (unsigned char) old_col) return;
+
+	pila = (unsigned long*) malloc(cap * sizeof(unsigned long));
+	if (pila == NULL) return;
+	pila[sp++] = ((unsigned long) y << 16) | x;
+
+	while (sp > 0)
+	{
+		sp--;
+		seed = pila[sp];
+		sx = (unsigned int) (seed & 0xffff);
+		sy = (unsigned int) (seed >> 16);
+		xl = sx;
+		while (xl > 0 && video[sy * VGA256_WIDTH + xl - 1] == (unsigned char) old_col) xl--;
+		xr = xl;
+		while (xr < VGA256_WIDTH && video[sy * VGA256_WIDTH + xr] == (unsigned char) old_col) xr++;
+		memset(&video[sy * VGA256_WIDTH + xl], (unsigned char) new_col, xr - xl);
+		if (sy > 0)
+		{
+			nx = xl;
+			while (nx < xr)
+			{
+				if (video[(sy - 1) * VGA256_WIDTH + nx] == (unsigned char) old_col)
+				{
+					if (!VGA256FloodPush(&pila, &sp, &cap, ((unsigned long) (sy - 1) << 16) | nx))
+					{
+						free(pila);
+						return;
+					}
+					while (nx < xr && video[(sy - 1) * VGA256_WIDTH + nx] == (unsigned char) old_col) nx++;
+				}
+				else nx++;
+			}
+		}
+		if (sy + 1 < VGA256_HEIGHT)
+		{
+			nx = xl;
+			while (nx < xr)
+			{
+				if (video[(sy + 1) * VGA256_WIDTH + nx] == (unsigned char) old_col)
+				{
+					if (!VGA256FloodPush(&pila, &sp, &cap, ((unsigned long) (sy + 1) << 16) | nx))
+					{
+						free(pila);
+						return;
+					}
+					while (nx < xr && video[(sy + 1) * VGA256_WIDTH + nx] == (unsigned char) old_col) nx++;
+				}
+				else nx++;
+			}
+		}
+	}
+	free(pila);
 }
 
 
@@ -1218,13 +1191,12 @@ void VGA256OutText(void* pVideo, char* string, unsigned int x_cursor, unsigned i
 
 	if (font == NULL)
 	{
-		//font = (unsigned char*) MK_FP(0xF000, 0xFA6E);
-		font = (unsigned char*)MK_FP(0xF000, 0);
+		font = (unsigned char*)MK_FP(0xF000, 0xFA6E);
 	}
 
 	while (string[scount] != 0)
 	{
-		cptr = &font[string[scount] << 3];
+		cptr = &font[(unsigned char) string[scount] << 3];
 		for (y = 0; y < 8; y++)
 		{
 			font_bits = cptr[y];
@@ -1259,13 +1231,13 @@ void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 
 	if (font == NULL)
 	{
-		font = (unsigned char*)MK_FP(0xF000, 0);
+		font = (unsigned char*)MK_FP(0xF000, 0xFA6E);
 	}
 
 	c = (color << 8) | color;
 	while (string[scount] != 0)
 	{
-		cptr = &font[string[scount] << 3];
+		cptr = &font[(unsigned char) string[scount] << 3];
 		for (y = 0; y < 8; y++)
 		{
 			font_bits = cptr[y];
@@ -1301,13 +1273,13 @@ void VGA256OutText4x(void* pVideo, char* string, unsigned int x_cursor, unsigned
 
 	if (font == NULL)
 	{
-		font = (unsigned char*)MK_FP(0xF000, 0);
+		font = (unsigned char*)MK_FP(0xF000, 0xFA6E);
 	}
 
 	c = (color << 24) | (color << 16) | (color << 8) | color;
 	while (string[scount] != 0)
 	{
-		cptr = &font[string[scount] << 3];
+		cptr = &font[(unsigned char) string[scount] << 3];
 		for (y = 0; y < 8; y++)
 		{
 			font_bits = cptr[y];
@@ -1352,7 +1324,7 @@ void VGA256OutText2xOK(void* pVideo, char* string, unsigned int x_cursor, unsign
 
 	for (scount = 0; scount < slen; scount++)
 	{
-		cptr = &font[string[scount] << 3];
+		cptr = &font[(unsigned char) string[scount] << 3];
 		for (y = 0; y < 8; y++)
 		{
 			font_bits = cptr[y];
@@ -1380,120 +1352,120 @@ void VGA256OutText2xOK(void* pVideo, char* string, unsigned int x_cursor, unsign
 #pragma pack (push, 1)
 struct pcx_header
 {
-    char manufacturer;
-    char version;
-    char encoding;
-    char bits_per_pixel;
-    short int xmin, ymin;
-    short int xmax, ymax;
-    short int hres;
-    short int vres;
-    char palette16[48];
-    char reserved;
-    char color_planes;
-    short int bytes_per_line;
-    short int palette_type;
-    char filler[58];
+	char manufacturer;
+	char version;
+	char encoding;
+	char bits_per_pixel;
+	short int xmin, ymin;
+	short int xmax, ymax;
+	short int hres;
+	short int vres;
+	char palette16[48];
+	char reserved;
+	char color_planes;
+	short int bytes_per_line;
+	short int palette_type;
+	char filler[58];
 };
 #pragma pack (pop)
 
 /*------------------------------------------------------------------------------------------------------- */
 int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal)
 {
-    #define VGA256LoadPCXBufLen (16384)
+	#define VGA256LoadPCXBufLen (16384)
 	unsigned int i;
-    unsigned int bufptr = 0;
-    unsigned int mode = 0;    /* BYTEMODE */
-    int readlen = 0;
-    int infile = -1;
-    unsigned int outbyte = 0, bytecount = 0;
-    unsigned char* buffer = NULL;
-    unsigned int imagesize = 0;
-    struct pcx_header pcx_header;
-    int res = -9;
+	unsigned int bufptr = 0;
+	unsigned int mode = 0;    /* BYTEMODE */
+	int readlen = 0;
+	int infile = -1;
+	unsigned int outbyte = 0, bytecount = 0;
+	unsigned char* buffer = NULL;
+	unsigned int imagesize = 0;
+	struct pcx_header pcx_header;
+	int res = -9;
 
 
-    if ((infile = _open(filename, O_BINARY | O_RDONLY)) == -1)
-    {
-        res = -1;   /* Cannot open */
-    }
-    else
-    {
-        readlen = _read(infile, &pcx_header, sizeof(pcx_header));
-        if ((pcx_header.manufacturer == 10) && (pcx_header.bits_per_pixel == 8))
-        {
-	   if (dest)
-	   {
-	       buffer = malloc(VGA256LoadPCXBufLen);
-	       if (buffer)
-	       {
-		  readlen = 0;
-		  imagesize = (unsigned int)((pcx_header.xmax - pcx_header.xmin + 1) * (pcx_header.ymax - pcx_header.ymin + 1) * pcx_header.bits_per_pixel >> 3);
-		  for (i = 0; i < imagesize; i++)
-		  {
-		      if (mode == 0)  /* BYTEMODE */
-		      {
-			 if (bufptr >= readlen)
-			 {
-			     bufptr = 0;
-			     if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) <= 0)
-			     {
-				break;
-			     }
-			 }
-			 outbyte = (unsigned char) buffer[bufptr++];
-			 if (outbyte > 0xbf)
-			 {
-			     bytecount = (unsigned int)((unsigned int)outbyte & 0x3f);
-			     if (bufptr >= readlen)
-			     {
-				bufptr = 0;
-				if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) <= 0)
-				{
-				    break;
-				}
-			     }
-			     outbyte = (unsigned char) buffer[bufptr++];
-			     if (--bytecount > 0)
-			     {
-				mode = 1;   /* RUNMODE */
-			     }
-			 }
-		      }
-		      else if (--bytecount == 0)
-		      {
-			 mode = 0;   /* BYTEMODE */
-		      }
-		      *dest++ = (unsigned char) outbyte;
-		  }
-		  free(buffer);
-	       }
-	       else
-	       {
-		  res = -3; /* Cannot allocate */
-	       }
-	   }
-	   if (pal)
-	   {
-	       _lseek(infile, -768L, SEEK_END);
-	       readlen = _read(infile, pal, 3 * 256);
-	       for (i = 0; i < readlen; i++)
-	       {
-		  pal[i] = pal[i] >> 2;
-	       }
-	   }
+	if ((infile = _open(filename, O_BINARY | O_RDONLY)) == -1)
+	{
+		res = -1;   /* Cannot open */
+	}
+	else
+	{
+		readlen = _read(infile, &pcx_header, sizeof(pcx_header));
+		if ((pcx_header.manufacturer == 10) && (pcx_header.bits_per_pixel == 8))
+		{
+			imagesize = (unsigned int)((pcx_header.xmax - pcx_header.xmin + 1) * (pcx_header.ymax - pcx_header.ymin + 1) * pcx_header.bits_per_pixel >> 3);
 			res = imagesize;
-        }
-        else
-        {
-	   res = -2;   /* Invalid PCX */
-        }
-    }
-    if (infile != -1)
-    {
-        _close(infile);
-    }
-    return(res);
+			if (dest)
+			{
+				buffer = malloc(VGA256LoadPCXBufLen);
+				if (buffer)
+				{
+					readlen = 0;
+					for (i = 0; i < imagesize; i++)
+					{
+						if (mode == 0)  /* BYTEMODE */
+						{
+							if (bufptr >= readlen)
+							{
+								bufptr = 0;
+								if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) <= 0)
+								{
+									break;
+								}
+							}
+							outbyte = (unsigned char) buffer[bufptr++];
+							if (outbyte > 0xbf)
+							{
+								bytecount = (unsigned int)((unsigned int)outbyte & 0x3f);
+								if (bufptr >= readlen)
+								{
+									bufptr = 0;
+									if ((readlen = _read(infile, buffer, VGA256LoadPCXBufLen)) <= 0)
+									{
+										break;
+									}
+								}
+								outbyte = (unsigned char) buffer[bufptr++];
+								if (--bytecount > 0)
+								{
+									mode = 1;   /* RUNMODE */
+								}
+							}
+						}
+						else if (--bytecount == 0)
+						{
+							mode = 0;   /* BYTEMODE */
+						}
+						*dest++ = (unsigned char) outbyte;
+					}
+					free(buffer);
+				}
+				else
+				{
+					res = -3; /* Cannot allocate */
+				}
+			}
+			if (pal)
+			{
+				_lseek(infile, -768L, SEEK_END);
+				readlen = _read(infile, pal, 3 * 256);
+				for (i = 0; i < readlen; i++)
+				{
+					pal[i] = pal[i] >> 2;
+				}
+			}
+		}
+		else
+		{
+			res = -2;   /* Invalid PCX */
+		}
+	}
+	if (infile != -1)
+	{
+		_close(infile);
+	}
+	return(res);
 }
 
 
@@ -1534,6 +1506,7 @@ int VGA256DecodePCX(unsigned char *dest, unsigned char *buffer)
 			}
 			*dest++ = (unsigned char)outbyte;
 		}
+		if (buffer[bufptr] == 0x0c) bufptr++;   /* skip PCX-256 palette marker if present */
 		for (i = 0; i < 768; i++)
 		{
 			(*dest++) = (unsigned char)(buffer[bufptr++] >> 2);
@@ -1566,8 +1539,8 @@ struct bmp_header
 	unsigned long  image_size_bytes; // Image size in bytes
 	long x_resolution_ppm; // Pixels per meter
 	long y_resolution_ppm; // Pixels per meter
-	unsigned long  num_colors;       // Number of colors  
-	unsigned long  important_colors; // Important colors 
+	unsigned long  num_colors;       // Number of colors
+	unsigned long  important_colors; // Important colors
 
 };
 #pragma pack (pop)
@@ -1578,6 +1551,10 @@ int VGA256LoadBMP(char* filename, unsigned char* dest, unsigned char* pal)
 {
 	int infile = -1;
 	struct bmp_header bmp_header;
+	unsigned char bgra[1024];
+	unsigned char* rowbuf;
+	unsigned int colors, i, stride;
+	long y;
 	int res = -9;
 
 
@@ -1590,20 +1567,42 @@ int VGA256LoadBMP(char* filename, unsigned char* dest, unsigned char* pal)
 		_read(infile, &bmp_header, sizeof(bmp_header));
 		if ((bmp_header.type == 0x4d42) && (bmp_header.bits_per_pixel == 8) && (bmp_header.num_planes == 1) && (bmp_header.num_colors <= 256) && (bmp_header.compression == 0))
 		{
+			colors = (bmp_header.num_colors == 0) ? 256 : bmp_header.num_colors;
+			res = (int) (bmp_header.width_px * bmp_header.height_px);
 			if (pal)
 			{
-				_read(infile, pal, 3 * 256);
+				_lseek(infile, 14 + bmp_header.dib_header_size, SEEK_SET);
+				_read(infile, bgra, colors * 4);
+				for (i = 0; i < colors; i++)
+				{
+					pal[i * 3] = bgra[i * 4 + 2] >> 2;
+					pal[i * 3 + 1] = bgra[i * 4 + 1] >> 2;
+					pal[i * 3 + 2] = bgra[i * 4] >> 2;
+				}
 			}
 			if (dest)
 			{
-				_lseek(infile, bmp_header.offset, SEEK_SET);
-				_read(infile, dest, bmp_header.image_size_bytes);
+				stride = (bmp_header.width_px + 3) & ~3;
+				rowbuf = malloc(stride);
+				if (rowbuf)
+				{
+					_lseek(infile, bmp_header.offset, SEEK_SET);
+					for (y = bmp_header.height_px - 1; y >= 0; y--)
+					{
+						_read(infile, rowbuf, stride);
+						memcpy(&dest[y * bmp_header.width_px], rowbuf, bmp_header.width_px);
+					}
+					free(rowbuf);
+				}
+				else
+				{
+					res = -3;   /* Cannot allocate */
+				}
 			}
-			res = bmp_header.image_size_bytes;
 		}
 		else
 		{
-			res = -2;   /* Invalid PCX */
+			res = -2;   /* Invalid BMP */
 		}
 	}
 	if (infile != -1)

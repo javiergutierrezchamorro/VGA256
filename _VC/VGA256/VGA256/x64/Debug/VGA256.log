@@ -1,8 +1,0 @@
-﻿  data.c
-  main.c
-D:\PROYECTOS\VGA256\Source\VGA256.h(4,10): error C1083: No se puede abrir el archivo incluir: 'i86.h': No such file or directory
-  vga256.c
-  (compilando archivo de origen "../../Source/main.c")
-  
-D:\PROYECTOS\VGA256\Source\vga256.c(11,10): error C1083: No se puede abrir el archivo incluir: 'mem.h': No such file or directory
-  Generando código...

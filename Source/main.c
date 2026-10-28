@@ -17,9 +17,6 @@ void DemoEnd(void);
 void main( int argc, char *argv[] )
 {
 	short iMode;
-	unsigned int i, j, k;
-	unsigned char* logo;
-	unsigned char* rotated;
 
 
 	VBE_Init();
@@ -91,7 +88,7 @@ void DemoDraw(void)
 
 	VGA256LineH(VGA256_Video, 0, VGA256_HEIGHT / 2, VGA256_WIDTH, 50);
 
-	VGA256LineV(VGA256_Video, 320, 0, VGA256_WIDTH, 100);
+	VGA256LineV(VGA256_Video, 320, 0, VGA256_HEIGHT, 100);
 
 	VGA256DrawBox(VGA256_Video, 10, 10, VGA256_WIDTH - 20, VGA256_HEIGHT - 20, 200);
 
@@ -109,9 +106,9 @@ void DemoDraw(void)
 /*------------------------------------------------------------------------------------------------------- */
 void DemoPorsche(void)
 {
-	unsigned int i, j, k;
+	unsigned int i;
 	unsigned char *porsche, *logo, *pal;
-	unsigned char* porsche320x240, *porsche640x480;
+	unsigned char* porsche160x120, *rotated;
 
 	porsche = malloc(640 * 1071);
 	logo = malloc(250 * 151);
@@ -122,18 +119,18 @@ void DemoPorsche(void)
 	free(pal);
 
 
-	porsche640x480 = malloc(640 * 480);
-	porsche320x240 = malloc(320 * 240);
-	//VGA256ScaleImage(porsche320x240, &porsche[640*400], 160, 120, 640, 480);
-	VGA256ScaleImage025x(porsche320x240, &porsche[640 * 400], 640, 480);
+	rotated = malloc(160 * 120);
+	porsche160x120 = malloc(160 * 120);
+	//VGA256ScaleImage(porsche160x120, &porsche[640*400], 160, 120, 640, 480);
+	VGA256ScaleImage025x(porsche160x120, &porsche[640 * 400], 640, 480);
 
 	for (i = 0; i < 360; i++)
 	{
-		VGA256RotateImage(porsche640x480, porsche320x240, 160, 120, i);
-		VGA256ScaleImage4x(VGA256_Video, porsche640x480, 160, 120);
+		VGA256RotateImage(rotated, porsche160x120, 160, 120, i);
+		VGA256ScaleImage4x(VGA256_Video, rotated, 160, 120);
 	}
-	free(porsche320x240);
-	free(porsche640x480);
+	free(rotated);
+	free(porsche160x120);
 	
 	for (i = 0; i < 1071 - 480; i++)
 	{
@@ -151,7 +148,7 @@ void DemoPorsche(void)
 		VGA256WaitVRetrace();
 	}
 	free(logo);
-	
+	free(porsche);
 }
 
 
@@ -184,8 +181,13 @@ void DemoEnd(void)
 		VGA256ScaleImage(scaled, rotated, j, k, 160, 120);
 		VGA256ClearScreen(VGA256_Video, 0);
 		VGA256WaitVRetrace();
-		VGA256PutImage(VGA256_Video, scaled, 640 - j >> 1, 480 - j >> 1, j, k);
-		if (i & 31)
+		VGA256PutImage(VGA256_Video, scaled, (640 - j) >> 1, (480 - k) >> 1, j, k);
+		if ((i & 31) == 0)
+		{
+			j -= 4;
+			k -= 3;
+		}
+		else if ((i & 3) == 0)
 		{
 			for (l = 0; l < 768; l++)
 			{
@@ -196,15 +198,11 @@ void DemoEnd(void)
 			}
 			VGA256SetPalette(pal);
 		}
-		else if (i & 3)
-		{
-			j -= 4;
-			k -= 3;
-		}
 	}
 	VGA256ClearScreen(VGA256_Video, 0);
 	free(scaled);
 	free(rotated);
+	free(background160x120);
 	free(pal);
 }
 
@@ -214,8 +212,8 @@ void DemoEnd(void)
 /*------------------------------------------------------------------------------------------------------- */
 void Demo(void)
 {
-	unsigned int i, j, k;
-	unsigned char* b, * c, * p;
+	unsigned int i;
+	unsigned char* b, * c;
 	clock_t start_time, end_time;
 
 	c = malloc(320 * 200);

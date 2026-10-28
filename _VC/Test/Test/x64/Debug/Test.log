@@ -1,3 +1,0 @@
-﻿  test.c
-D:\PROYECTOS\VGA256\Source\test.c(93,16): warning C4101: 'b': variable local sin referencia
-  Test.vcxproj -> D:\PROYECTOS\VGA256\_VC\Test\x64\Debug\Test.exe

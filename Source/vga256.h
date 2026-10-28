@@ -49,67 +49,67 @@ typedef void ( * tagSetDisplayStartType )(short x, short y);
 typedef void ( * tagSetBankType )(short bnk);
 
 struct bcd16 {
-  unsigned char lo;
-  unsigned char hi;
+	unsigned char lo;
+	unsigned char hi;
 };
 
 struct DPMI_PTR
 {
-  unsigned short int segment;
-  unsigned short int selector;
+	unsigned short int segment;
+	unsigned short int selector;
 };
 
 struct VBE_VbeInfoBlock
 {
-  char           vbeSignature[4];
-  struct bcd16   vbeVersion;
-  char *         OemStringPtr;
-  unsigned long  Capabilities;
-  unsigned short * VideoModePtr;
-  unsigned short TotalMemory;
-  unsigned short OemSoftwareRev;
-  char *         OemVendorNamePtr;
-  char *         OemProductNamePtr;
-  char *         OemProductRevPtr;
-  char           Reserved[222];
-  char           OemData[256];
+	char           vbeSignature[4];
+	struct bcd16   vbeVersion;
+	char *         OemStringPtr;
+	unsigned long  Capabilities;
+	unsigned short * VideoModePtr;
+	unsigned short TotalMemory;
+	unsigned short OemSoftwareRev;
+	char *         OemVendorNamePtr;
+	char *         OemProductNamePtr;
+	char *         OemProductRevPtr;
+	char           Reserved[222];
+	char           OemData[256];
 };
 
 struct  VBE_ModeInfoBlock
 {
-  unsigned short ModeAttributes;
-  char WinAAttributes;
-  char WinBAttributes;
-  unsigned short Granularity;
-  unsigned short WinSize;
-  unsigned short WinASegment;
-  unsigned short WinBSegment;
-  void *         WinFuncPtr;
-  unsigned short BytesPerScanline;
-  unsigned short XResolution;
-  unsigned short YResolution;
-  char XCharSize;
-  char YCharSize;
-  char NumberOfPlanes;
-  char BitsPerPixel;
-  char NumberOfBanks;
-  char MemoryModel;
-  char BankSize;
-  char NumberOfImagePages;
-  char Reserved;
-  char RedMaskSize;
-  char RedFieldPosition;
-  char GreenMaskSize;
-  char GreenFieldPosition;
-  char BlueMaskSize;
-  char BlueFieldPosition;
-  char RsvdMaskSize;
-  char RsvdFieldPosition;
-  char DirectColorModeInfo;
-  void * PhysBasePtr;
-  void * OffScreenMemOffset;
-  unsigned short OffScreenMemSize;
-  char  reserved2[206];
+	unsigned short ModeAttributes;
+	char WinAAttributes;
+	char WinBAttributes;
+	unsigned short Granularity;
+	unsigned short WinSize;
+	unsigned short WinASegment;
+	unsigned short WinBSegment;
+	void *         WinFuncPtr;
+	unsigned short BytesPerScanline;
+	unsigned short XResolution;
+	unsigned short YResolution;
+	char XCharSize;
+	char YCharSize;
+	char NumberOfPlanes;
+	char BitsPerPixel;
+	char NumberOfBanks;
+	char MemoryModel;
+	char BankSize;
+	char NumberOfImagePages;
+	char Reserved;
+	char RedMaskSize;
+	char RedFieldPosition;
+	char GreenMaskSize;
+	char GreenFieldPosition;
+	char BlueMaskSize;
+	char BlueFieldPosition;
+	char RsvdMaskSize;
+	char RsvdFieldPosition;
+	char DirectColorModeInfo;
+	void * PhysBasePtr;
+	void * OffScreenMemOffset;
+	unsigned short OffScreenMemSize;
+	char  reserved2[206];
 };
 
 #pragma pack (pop)
@@ -137,7 +137,9 @@ int VBE_8BitDAC (void);
 
 
 /*------------------------------------------------------------------------------------------------------- */
+#if !defined(VGA256_MODE_320X200X8) && !defined(VGA256_MODE_640X480X8) && !defined(VGA256_MODE_1024X768X8)
 #define VGA256_MODE_640X480X8
+#endif
 #if defined(VGA256_MODE_320X200X8)
 	#define VGA256_WIDTH (320)
 	#define VGA256_HEIGHT (200)
@@ -151,7 +153,7 @@ int VBE_8BitDAC (void);
 
 
 /*------------------------------------------------------------------------------------------------------- */
-#define VGA256PutScreen(pVideo,  b) (memcpy(pVideo, b, VGA256_WIDTH * VGA256_HEIGHT))
+#define VGA256PutScreen(pVideo, b) (memcpy(pVideo, b, VGA256_WIDTH * VGA256_HEIGHT))
 #define _VGA256ABS(a) ((a < 0) ? -a : a)
 #define _VGA256Sgn(a) (a > 0 ? 1 : (a < 0 ? -1 : 0))
 
@@ -167,16 +169,16 @@ void VGA256LineV(void *pVideo, unsigned int x, unsigned int y, unsigned int heig
 void VGA256DrawBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color);
 void VGA256FillBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color);
 void VGA256ClearScreen(void *pVideo, unsigned int color);
-void VGA256PutSprite(void *pcDest, void *pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
+void VGA256PutSprite(void *pVideo, void *pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
 void VGA256PutImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
 void VGA256GetImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
 void VGA256WaitVRetrace(void);
 void VGA256SetPalette(const void* pal);
 void VGA256GetPalette(void* pal);
 void VGA256FadeOut(void);
-void VGA256FadeIn(char* paleta);
-void VGA256FadeTo(char* paleta);
-void VGA256Circle(void* pVideo, unsigned x, unsigned int y, unsigned int radio, unsigned int color);
+void VGA256FadeIn(unsigned char* paleta);
+void VGA256FadeTo(unsigned char* paleta);
+void VGA256Circle(void* pVideo, unsigned int x, unsigned int y, unsigned int radio, unsigned int color);
 void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, unsigned int d, unsigned char color);
 void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int widthd, unsigned int heightd, unsigned int widths, unsigned int heights);
 void VGA256ScaleImage025x(unsigned char* pDest, unsigned char* pSource, unsigned int widths, unsigned int heights);
@@ -188,6 +190,7 @@ void VGA256FloodFill(void* pVideo, unsigned int x, unsigned int y, unsigned int 
 void VGA256OutText(void* pVideo, char* string, unsigned int x, unsigned int y, unsigned int color, unsigned char* font);
 void VGA256OutText2x(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font);
 void VGA256OutText4x(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font);
+void VGA256OutText2xOK(void* pVideo, char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, unsigned char* font);
 int VGA256LoadPCX(char* filename, unsigned char* dest, unsigned char* pal);
 int VGA256DecodePCX(unsigned char* dest, unsigned char* buffer);
 int VGA256LoadBMP(char* filename, unsigned char* dest, unsigned char* pal);
@@ -198,165 +201,166 @@ int VGA256GetCh(void);
 
 /*------------------------------------------------------------------------------------------------------- */
 //void VGA256SetPalette(const void *pal);
-#pragma aux VGA256SetPalette =\
-    "mov ecx, 256*3"\
-    "xor al, al"\
-    "mov dx, 3c8h"\
-    "out dx, al"\
-    "inc dx"\
-    "rep outsb"\
-parm[ESI]\
-modify exact[ESI EDX ECX EAX];
-
+#pragma aux VGA256SetPalette = \
+"cld" \
+"mov ecx, 256 * 3" \
+"xor eax, eax" \
+"mov dx, 3c8h" \
+"out dx, al" \
+"inc dx" \
+"rep outsb" \
+parm [esi] \
+modify exact [esi edx ecx eax];
 
 
 /*------------------------------------------------------------------------------------------------------- */
 //void VGA256GetPalette(void* pal);
-#pragma aux VGA256GetPalette =\
-    "mov ecx, 256*3"\
-    "xor al, al"\
-    "mov dx, 3c7h"\
-    "out dx, al"\
-    "add dx, 2"\
-    "rep insb"\
-parm[EDI]\
-modify exact[EDI EDX ECX EAX];
-
+#pragma aux VGA256GetPalette = \
+"cld" \
+"mov ecx, 256 * 3" \
+"xor eax, eax" \
+"mov dx, 3c7h" \
+"out dx, al" \
+"add dx, 2" \
+"rep insb" \
+parm [edi] \
+modify exact [edi edx ecx eax];
 
 
 /*------------------------------------------------------------------------------------------------------- */
 void _VGA256MemCpy0(void *pDest, void *pSource, size_t iLen);
-
-#pragma aux _VGA256MemCpy0 =\
-	"cld"\
-	"push ecx"\
-	"shr ecx, 2"\
-	"draw_px_0:"\	
-    "mov eax, [esi]"\
-    "mov ebx, [edi]"\
-    "test al, al"\
-    "jz draw_px_1"\
-    "mov bl, al"\
-    "draw_px_1:"\
-    "test ah, ah"\
-    "jz draw_px_2"\
-    "mov bh, ah"\
-    "draw_px_2:"\
-    "bswap eax"\
-    "bswap ebx"\
-    "test ah, ah"\
-    "jz draw_px_3"\
-    "mov bh, ah"\
-    "draw_px_3:"\
-    "test al, al"\
-    "jz draw_px_4"\
-    "mov bl, al"\
-    "draw_px_4:"\
-    "bswap ebx"\
-    "mov [edi], ebx"\
-    "add esi, 4"\
-    "add edi, 4"\
-    "dec ecx"\
-    "jnz draw_px_0"\
-    "pop ecx"\
-    "and ecx, 3"\
-    "jz draw_px_7"\
-    "draw_px_5:"\
-    "mov al, [esi]"\
-    "test al, al"\
-    "jz draw_px_6"\
-    "mov [edi+0], al"\
-    "draw_px_6:"\
-    "inc esi"\
-    "inc edi"\
-    "dec ecx"\
-    "jnz draw_px_5"\
-    "draw_px_7:"\
-parm[EDI][ESI][ECX]\
-modify exact[EDI ESI ECX EBX EAX];
-
+#pragma aux _VGA256MemCpy0 = \
+"mov edx, ecx" \
+"shr ecx, 2" \
+"jz v0_tail" \
+"v0_lp:" \
+"mov eax, [esi]" \
+"add esi, 4" \
+"test eax, eax" \
+"jz v0_adv" \
+"test al, al" \
+"jz v0_1" \
+"mov [edi], al" \
+"v0_1:" \
+"test ah, ah" \
+"jz v0_2" \
+"mov [edi+1], ah" \
+"v0_2:" \
+"shr eax, 16" \
+"test al, al" \
+"jz v0_3" \
+"mov [edi+2], al" \
+"v0_3:" \
+"test ah, ah" \
+"jz v0_adv" \
+"mov [edi+3], ah" \
+"v0_adv:" \
+"add edi, 4" \
+"dec ecx" \
+"jnz v0_lp" \
+"v0_tail:" \
+"and edx, 3" \
+"jz v0_done" \
+"v0_b:" \
+"mov al, [esi]" \
+"inc esi" \
+"test al, al" \
+"jz v0_nb" \
+"mov [edi], al" \
+"v0_nb:" \
+"inc edi" \
+"dec edx" \
+"jnz v0_b" \
+"v0_done:" \
+parm [edi] [esi] [ecx] \
+modify exact [eax ecx edx esi edi];
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256MemCpyMMX(char* Dest, char* Src, unsigned int Len);
-#pragma aux VGA256MemCpyMMX =\
-    "mov eax, ecx"\
-    "sub ecx, edi"\
-    "sub ecx, eax"\
-    "and ecx, 7"\
-    "sub eax, ecx"\
-    "jle short LEndBytes"\
-    "emms"\
-    "rep movsb"\
-    "mov ecx, eax"\
-    "and eax, 7"\
-    "shr ecx, 3"\
-    "jz	LEndBytes"\
-    "sub edi, esi"\
-    "l1:"\
-    "movq mm0, [esi]"\
-    "movq [edi+esi], mm0"\
-    "add esi,8"\
-    "dec ecx"\
-    "jnz l1"\
-    "add edi, esi"\
-    "emms"\
-    "LEndBytes:"\
-    "add ecx, eax"\
-    "rep movsb"\
-    parm[EDI][ESI][ECX]\
-    modify[EAX ECX ESI EDI];
-    
+#pragma aux VGA256MemCpyMMX = \
+"cld" \
+"mov eax, ecx" \
+"shr ecx, 4" \
+"jz mm_tail" \
+"mm_lp:" \
+"movq mm0, [esi]" \
+"movq mm1, [esi+8]" \
+"movq [edi], mm0" \
+"movq [edi+8], mm1" \
+"add esi, 16" \
+"add edi, 16" \
+"dec ecx" \
+"jnz mm_lp" \
+"mm_tail:" \
+"emms" \
+"mov ecx, eax" \
+"and ecx, 15" \
+"rep movsb" \
+parm [edi] [esi] [ecx] \
+modify exact [eax ecx esi edi];
 
 /*------------------------------------------------------------------------------------------------------- */
 #pragma aux VGA256ScaleImage = \
-    "push esi"                    \
-    "push edi"                    \
-    "push ebx"                    \
-    "push ebp"                    \
-                                  \
-    "xor ebx, ebx"                /* y = 0 */ \
-"y_loop:"                         \
-    "mov eax, ebx"                \
-    "mul dword ptr [esp + 32]"    /* eax = y * heights */ \
-    "mov ecx, [esp + 28]"         /* ecx = heightd */ \
-    "xor edx, edx"                \
-    "div ecx"                     /* eax = y_src */ \
-    "mov ebp, eax"                \
-    "mov ecx, [esp + 24]"         /* ecx = widths */ \
-    "imul ebp, ecx"               /* ebp = y_src * widths */ \
-                                  \
-    "xor ecx, ecx"                /* x = 0 */ \
-"x_loop:"                         \
-    "mov eax, ecx"                \
-    "mul dword ptr [esp + 24]"    /* eax = x * widths */ \
-    "mov esi, [esp + 20]"         /* esi = widthd */ \
-    "xor edx, edx"                \
-    "div esi"                     /* eax = x_src */ \
-    "add eax, ebp"                /* eax = y_src * widths + x_src */ \
-    "mov esi, [esp + 12]"         /* esi = pSource */ \
-    "mov al, [esi + eax]"         /* carga píxel */ \
-    "mov edi, [esp + 16]"         /* edi = pDest */ \
-    "add edi, ebx"                \
-    "imul edi, [esp + 20]"        /* edi = y * widthd */ \
-    "add edi, ecx"                /* edi += x */ \
-    "mov [edi], al"               /* guarda píxel */ \
-                                  \
-    "inc ecx"                     \
-    "cmp ecx, [esp + 20]"         \
-    "jl x_loop"                   \
-                                  \
-    "inc ebx"                     \
-    "cmp ebx, [esp + 28]"         \
-    "jl y_loop"                   \
-                                  \
-    "pop ebp"                     \
-    "pop ebx"                     \
-    "pop edi"                     \
-    "pop esi"                     \
-    parm [edi] [esi] [eax] [ebx] [ecx] [edx] \
-    modify [eax ebx ecx edx esi edi ebp]
-
-
+"cmp eax, ecx" \
+"jne sc_gen" \
+"cmp ebx, edx" \
+"jne sc_gen" \
+"mul ebx" \
+"mov ecx, eax" \
+"cld" \
+"shr ecx, 2" \
+"rep movsd" \
+"mov ecx, eax" \
+"and ecx, 3" \
+"rep movsb" \
+"jmp sc_ret" \
+"sc_gen: push ebp" \
+"mov ebp, esp" \
+"sub esp, 20" \
+"mov [ebp-4], eax" \
+"mov [ebp-8], ecx" \
+"mov [ebp-12], esi" \
+"mov [ebp-20], edx" \
+"mov eax, ecx" \
+"mov edx, eax" \
+"shl eax, 16" \
+"shr edx, 16" \
+"div dword ptr [ebp-4]" \
+"mov [ebp-16], eax" \
+"mov eax, [ebp-20]" \
+"mov edx, eax" \
+"shl eax, 16" \
+"shr edx, 16" \
+"div ebx" \
+"mov [ebp-20], eax" \
+"xor eax, eax" \
+"sc_y: push eax" \
+"push ebx" \
+"shr eax, 16" \
+"mul dword ptr [ebp-8]" \
+"mov esi, [ebp-12]" \
+"add esi, eax" \
+"xor ebx, ebx" \
+"mov ecx, [ebp-4]" \
+"mov edx, [ebp-16]" \
+"sc_x: mov eax, ebx" \
+"shr eax, 16" \
+"mov al, [esi+eax]" \
+"mov [edi], al" \
+"inc edi" \
+"add ebx, edx" \
+"dec ecx" \
+"jnz sc_x" \
+"pop ebx" \
+"pop eax" \
+"add eax, [ebp-20]" \
+"dec ebx" \
+"jnz sc_y" \
+"mov esp, ebp" \
+"pop ebp" \
+"sc_ret: nop" \
+parm [edi] [esi] [eax] [ebx] [ecx] [edx] \
+modify exact [eax ebx ecx edx esi edi ebp];
 #ifdef __cplusplus
 }
 #endif
