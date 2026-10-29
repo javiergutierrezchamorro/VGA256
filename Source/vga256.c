@@ -494,6 +494,13 @@ void VGA256FillBox(void *pVideo, unsigned int x, unsigned int y, unsigned int wi
 {
 	unsigned int h;
 	unsigned char *offset = (unsigned char *) &VGA256OFFSET(pVideo, x, y);
+	
+	
+	if (width == VGA256_WIDTH)
+	{
+    	memset(&VGA256OFFSET(pVideo, x, y), color, (size_t) width * height);
+    	return;
+	}
 
 	for(h = 0; h < height; h++)
 	{
