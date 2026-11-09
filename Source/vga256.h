@@ -137,12 +137,15 @@ int VBE_8BitDAC (void);
 
 
 /*------------------------------------------------------------------------------------------------------- */
-#if !defined(VGA256_MODE_320X200X8) && !defined(VGA256_MODE_640X480X8) && !defined(VGA256_MODE_1024X768X8)
+#if !defined(VGA256_MODE_320X200X8) && !defined(VGA256_MODE_640X400X8) && !defined(VGA256_MODE_640X480X8) && !defined(VGA256_MODE_1024X768X8)
 #define VGA256_MODE_640X480X8
 #endif
 #if defined(VGA256_MODE_320X200X8)
 	#define VGA256_WIDTH (320)
 	#define VGA256_HEIGHT (200)
+#elif defined(VGA256_MODE_640X400X8)
+	#define VGA256_WIDTH (640)
+	#define VGA256_HEIGHT (400)
 #elif defined(VGA256_MODE_640X480X8)
 	#define VGA256_WIDTH (640)
 	#define VGA256_HEIGHT (480)
@@ -153,16 +156,30 @@ int VBE_8BitDAC (void);
 
 
 /*------------------------------------------------------------------------------------------------------- */
+/* Per-pixel accessors are macros so they are always expanded inline: the cost of a function
+ * call was an order of magnitude bigger than the single store/load they perform.
+ * Beware: arguments are evaluated more than once, they must not have side effects. */
+#if defined(VGA256_MODE_320X200X8)
+	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 8) + ((y) << 6) + (x)])
+#elif defined(VGA256_MODE_640X400X8) || defined(VGA256_MODE_640X480X8)
+	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 9) + ((y) << 7) + (x)])
+#elif defined(VGA256_MODE_1024X768X8)
+	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 10) + (x)])
+#endif
+
+#define VGA256PutPixel(pVideo, x, y, color) (VGA256OFFSET(pVideo, x, y) = (unsigned char) (color))
+#define VGA256GetPixel(pVideo, x, y) ((unsigned int) VGA256OFFSET(pVideo, x, y))
+
+
+/*------------------------------------------------------------------------------------------------------- */
 #define VGA256PutScreen(pVideo, b) (memcpy(pVideo, b, VGA256_WIDTH * VGA256_HEIGHT))
 #define _VGA256ABS(a) (((a) < 0) ? -(a) : (a))
 #define _VGA256Sgn(a) ((a) > 0 ? 1 : ((a) < 0 ? -1 : 0))
 
 
 /*------------------------------------------------------------------------------------------------------- */
-extern const int VGA256CosDeg[];
+extern const short VGA256CosDeg[];
 extern const unsigned char VGA256Font[];
-void VGA256PutPixel(void *pVideo, unsigned int x, unsigned int y, unsigned int color);
-unsigned int VGA256GetPixel(void *pVideo, unsigned int x, unsigned int y);
 void VGA256LineH(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int color);
 void VGA256LineV(void *pVideo, unsigned int x, unsigned int y, unsigned int height, unsigned int color);
 void VGA256DrawBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color);

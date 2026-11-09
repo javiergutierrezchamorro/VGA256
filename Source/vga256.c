@@ -15,6 +15,9 @@
 #define VBE2SIGNATURE "VBE2"
 #define VESASIGNATURE "VESA"
 
+/* Translates a realmode far pointer (seg:off packed in one dword) into a flat address */
+#define RM2FLAT(p) ((void *) (((((unsigned long) (p)) >> 12) & 0xffff0UL) + (((unsigned long) (p)) & 0xffffUL)))
+
 static struct rminfo
 {
 	unsigned long EDI;
@@ -154,11 +157,17 @@ void * DPMI_MAP_PHYSICAL (void *p, unsigned long size)
 
 void VBE_Controller_Information  (struct VBE_VbeInfoBlock * a)
 {
+	if (VBE_Controller_Info_Pointer == NULL) return;
 	memcpy (a, VBE_Controller_Info_Pointer, sizeof (struct VBE_VbeInfoBlock));
 }
 
 void VBE_Mode_Information (short Mode, struct VBE_ModeInfoBlock * a)
 {
+	if (VbeModePool.segment == 0)
+	{
+		memset (a, 0, sizeof (struct VBE_ModeInfoBlock));
+		return;
+	}
 	PrepareRegisters();
 	RMI.EAX=0x00004f01;       // Get SVGA-Mode Information
 	RMI.ECX=Mode;
@@ -182,7 +191,7 @@ int VBE_IsModeLinear (short Mode)
 	return ((a.ModeAttributes & ATTR_LFB_Support)==ATTR_LFB_Support);
 }
 
-void asmSDS (short x, short y);
+static void asmSDS (short x, short y);
 #pragma aux asmSDS = "mov ax, 0x4f07" \
 "xor ebx, ebx" \
 "call [pm_setdisplaystartcall]" \
@@ -193,7 +202,7 @@ static void PM_SetDisplayStart (short x, short y)
 	asmSDS(x, y);
 }
 
-void asmSB (short bnk);
+static void asmSB (short bnk);
 #pragma aux asmSB = "mov ax, 0x4f05" \
 "mov bx, 0" \
 "call [pm_setwindowcall]" \
@@ -216,7 +225,7 @@ static void RM_SetDisplayStart (short x, short y)
 	RMIRQ (0x10);
 }
 
-void setbiosmode (unsigned short c);
+static void setbiosmode (unsigned short c);
 #pragma aux setbiosmode = "int 0x10" parm[ax] modify[eax ebx ecx edx esi edi];
 
 void VBE_SetMode (short Mode, int linear, int clear)
@@ -270,11 +279,13 @@ void VBE_SetMode (short Mode, int linear, int clear)
 
 int VBE_Test (void)
 {
+	if (VBE_Controller_Info_Pointer == NULL) return 0;
 	return (VBE_Controller_Info_Pointer->vbeVersion.hi>=0x2);
 }
 
 unsigned int VBE_VideoMemory (void)
 {
+	if (VBE_Controller_Info_Pointer == NULL) return 0;
 	return ((unsigned int) VBE_Controller_Info_Pointer->TotalMemory << 16);
 }
 
@@ -282,6 +293,8 @@ int VBE_FindMode (int xres, int yres, char bpp)
 {
 	int i;
 	struct VBE_ModeInfoBlock Info;
+
+	if (VBE_Controller_Info_Pointer == NULL) return -1;
 	// The standard VGA 320x200x256 mode is not part of the VBE mode list
 	if ((xres == 320) && (yres == 200) && (bpp == 8)) {
 		return 0x13;
@@ -351,6 +364,7 @@ void VBE_SetDACWidth (char bits)
 
 int VBE_8BitDAC (void)
 {
+	if (VBE_Controller_Info_Pointer == NULL) return 0;
 	return (VBE_Controller_Info_Pointer->Capabilities & CAP_8bit_DAC);
 }
 
@@ -364,6 +378,8 @@ static void VBE_InitPM (void)
 	RMIRQ (0x10);
 	if ( (RMI.EAX & 0xffff) == 0x004f ) {
 		if (pmcode) free (pmcode);
+		pmcode = NULL;
+		if ((RMI.ECX & 0x0000ffff) == 0) return;   /* empty PM table: keep realmode calls */
 		// copy the PM code to safe memory and call the copy, because
 		// the BIOS buffer can be reused by other VBE calls
 		pmcode = malloc (RMI.ECX  & 0x0000ffff);
@@ -380,6 +396,11 @@ static void VBE_InitPM (void)
 
 int VBE_Init (void)
 {
+	/* Already initialized: avoid leaking the DOS memory blocks on a second call */
+	if (VbeInfoPool.selector != 0)
+	{
+		return 1;
+	}
 	/* Allocate the Dos Memory for Mode and Controller Information Blocks */
 	/* and translate their pointers into flat memory space                */
 	DPMI_AllocDOSMem (512/16, &VbeInfoPool);
@@ -407,11 +428,11 @@ int VBE_Init (void)
 		return 0;
 	}
 	// Translate the Realmode Pointers into flat-memory address space
-	VBE_Controller_Info_Pointer->OemStringPtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemStringPtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemStringPtr);
-	VBE_Controller_Info_Pointer->VideoModePtr=(unsigned short*)((((unsigned long)VBE_Controller_Info_Pointer->VideoModePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->VideoModePtr);
-	VBE_Controller_Info_Pointer->OemVendorNamePtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemVendorNamePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemVendorNamePtr);
-	VBE_Controller_Info_Pointer->OemProductNamePtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemProductNamePtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemProductNamePtr);
-	VBE_Controller_Info_Pointer->OemProductRevPtr=(char*)((((unsigned long)VBE_Controller_Info_Pointer->OemProductRevPtr>>16)<<4)+(unsigned short)VBE_Controller_Info_Pointer->OemProductRevPtr);
+	VBE_Controller_Info_Pointer->OemStringPtr = (char *) RM2FLAT(VBE_Controller_Info_Pointer->OemStringPtr);
+	VBE_Controller_Info_Pointer->VideoModePtr = (unsigned short *) RM2FLAT(VBE_Controller_Info_Pointer->VideoModePtr);
+	VBE_Controller_Info_Pointer->OemVendorNamePtr = (char *) RM2FLAT(VBE_Controller_Info_Pointer->OemVendorNamePtr);
+	VBE_Controller_Info_Pointer->OemProductNamePtr = (char *) RM2FLAT(VBE_Controller_Info_Pointer->OemProductNamePtr);
+	VBE_Controller_Info_Pointer->OemProductRevPtr = (char *) RM2FLAT(VBE_Controller_Info_Pointer->OemProductRevPtr);
 
 	VBE_InitPM();
 	return 1;
@@ -433,27 +454,8 @@ void VBE_Done (void)
 }
 
 
-#if defined(VGA256_MODE_320X200X8)
-	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 8) + ((y) << 6) + (x)])
-#elif defined(VGA256_MODE_640X480X8)
-	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 9) + ((y) << 7) + (x)])
-#elif defined(VGA256_MODE_1024X768X8)
-	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 10) + (x)])
-#endif
-
-
-/*------------------------------------------------------------------------------------------------------- */
-void VGA256PutPixel(void *pVideo, unsigned int x, unsigned int y, unsigned int color)
-{
-	VGA256OFFSET(pVideo, x, y) = color;
-}
-
-
-/*------------------------------------------------------------------------------------------------------- */
-unsigned int VGA256GetPixel(void *pVideo, unsigned int x, unsigned int y)
-{
-	return(VGA256OFFSET(pVideo, x, y));
-}
+/* VGA256OFFSET and the per-pixel accessors (VGA256PutPixel / VGA256GetPixel) are macros in vga256.h,
+ * so they are always expanded inline in every translation unit. */
 
 
 /*------------------------------------------------------------------------------------------------------- */
@@ -496,9 +498,10 @@ void VGA256FillBox(void *pVideo, unsigned int x, unsigned int y, unsigned int wi
 	unsigned char *offset = (unsigned char *) &VGA256OFFSET(pVideo, x, y);
 	
 	
-	if (width == VGA256_WIDTH)
+	/* Full-width fills are contiguous rows: one single memset (writes the same bytes as the row loop) */
+	if ((x == 0) && (width == VGA256_WIDTH))
 	{
-    	memset(&VGA256OFFSET(pVideo, x, y), color, (size_t) width * height);
+    	memset(&VGA256OFFSET(pVideo, 0, y), color, (size_t) VGA256_WIDTH * height);
     	return;
 	}
 
@@ -542,9 +545,10 @@ void VGA256PutImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int
 	unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
 
 
-	if (piWidth == VGA256_WIDTH)
+	/* Full-width images are contiguous rows: one single memcpy (copies the same bytes as the row loop) */
+	if ((piX == 0) && (piWidth == VGA256_WIDTH))
 	{
-		memcpy((void*) offset, (void*) pcSource, (size_t) (piWidth * piHeight));
+		memcpy((void*) offset, (void*) pcSource, (size_t) (VGA256_WIDTH * piHeight));
 		return;
 	}
 
@@ -564,9 +568,10 @@ void VGA256GetImage(void* pVideo, void* pcDest, unsigned int piX, unsigned int p
 	unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
 
 
-	if (piWidth == VGA256_WIDTH)
+	/* Full-width images are contiguous rows: one single memcpy (copies the same bytes as the row loop) */
+	if ((piX == 0) && (piWidth == VGA256_WIDTH))
 	{
-		memcpy((void*) pcDest, (void*) offset, (size_t) (piWidth * piHeight));
+		memcpy((void*) pcDest, (void*) offset, (size_t) (VGA256_WIDTH * piHeight));
 		return;
 	}
 
@@ -743,73 +748,68 @@ void VGA256WaitVRetrace(void)
 
 
 /*------------------------------------------------------------------------------------------------------- */
+static int VGA256StepPalette(unsigned char* pal, const unsigned char* target)
+{
+	unsigned int x;
+	int changed = 0;
+
+	for (x = 0; x < 768; x++)
+	{
+		if (pal[x] < target[x])
+		{
+			pal[x]++;
+			changed = 1;
+		}
+		else if (pal[x] > target[x])
+		{
+			pal[x]--;
+			changed = 1;
+		}
+	}
+	return changed;
+}
+
+/*------------------------------------------------------------------------------------------------------- */
+/* Common fade loop: one DAC step per vertical retrace, stops as soon as both palettes are equal */
+static void VGA256FadeLoop(unsigned char* pal, const unsigned char* target)
+{
+	unsigned int y;
+	int changed = 1;
+
+	for (y = 0; (y < 63) && changed; y++)
+	{
+		changed = VGA256StepPalette(pal, target);
+		VGA256WaitVRetrace();
+		VGA256SetPalette(pal);
+	}
+}
+
+/*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeOut(void)
 {
-	unsigned int x, y;
-	unsigned char paleta[768];
+	unsigned char pal[768];
 
-	VGA256GetPalette(paleta);
-
-	for (y = 0; y < 63; y++)
-	{
-		for (x = 0; x < sizeof(paleta); x++)
-		{
-			if (paleta[x] > 0)
-			{
-				paleta[x]--;
-			}
-		}
-		VGA256WaitVRetrace();
-		VGA256SetPalette(paleta);
-	}
+	memset(pal, 0, sizeof(pal));
+	VGA256FadeTo(pal);
 }
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeIn(unsigned char* paleta)
 {
-	unsigned int x, y;
 	unsigned char pal[768];
 
 	memset(pal, 0, sizeof(pal));
-	for (y = 0; y < 63; y++)
-	{
-		for (x = 0; x < sizeof(pal); x++)
-		{
-			if (pal[x] < paleta[x])
-			{
-				pal[x]++;
-			}
-		}
-		VGA256WaitVRetrace();
-		VGA256SetPalette(pal);
-	}
+	VGA256FadeLoop(pal, paleta);
 }
 
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256FadeTo(unsigned char* paleta)
 {
-	unsigned int x, y;
 	unsigned char pal[768];
 
 	VGA256GetPalette(pal);
-
-	for (y = 0; y < 63; y++)
-	{
-		for (x = 0; x < sizeof(pal); x++)
-		{
-			if (pal[x] < paleta[x])
-			{
-				pal[x]++;
-			}
-			else if (pal[x] > paleta[x])
-			{
-				pal[x]--;
-			}
-		}
-		VGA256WaitVRetrace();
-		VGA256SetPalette(pal);
-	}
+	VGA256FadeLoop(pal, paleta);
 }
 
 
@@ -865,6 +865,18 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
 	int d1x, d1y, d2x, d2y, s, u, v;
 	int step1, step2;
 	unsigned char* offset;
+
+	/* Fast paths for axis-aligned lines (both endpoints included) */
+	if (b == d)
+	{
+		VGA256LineH(pVideo, (a < c) ? a : c, b, ((c > a) ? c - a : a - c) + 1, color);
+		return;
+	}
+	if (a == c)
+	{
+		VGA256LineV(pVideo, a, (b < d) ? b : d, ((d > b) ? d - b : b - d) + 1, color);
+		return;
+	}
 
 	u = c - a;
 	v = d - b;
@@ -1025,6 +1037,7 @@ void VGA256OutText(void* pVideo, const char* string, unsigned int x_cursor, unsi
 		cptr = &font[(unsigned char) *string << 3];
 		for (y = 0; y < 8; y++)
 		{
+			if (cptr[y] == 0) continue;   /* skip empty glyph rows */
 			offset = &VGA256OFFSET(pVideo, x_cursor, y_cursor + y);
 			for (mask = 0x80; mask != 0; mask >>= 1)
 			{
@@ -1062,6 +1075,7 @@ void VGA256OutText2x(void* pVideo, const char* string, unsigned int x_cursor, un
 		cptr = &font[(unsigned char) *string << 3];
 		for (y = 0; y < 8; y++)
 		{
+			if (cptr[y] == 0) continue;   /* skip empty glyph rows */
 			offset = (unsigned short *) &VGA256OFFSET(pVideo, x_cursor, y_cursor + (y << 1));
 			for (mask = 0x80; mask != 0; mask >>= 1)
 			{
@@ -1100,6 +1114,7 @@ void VGA256OutText4x(void* pVideo, const char* string, unsigned int x_cursor, un
 		cptr = &font[(unsigned char) *string << 3];
 		for (y = 0; y < 8; y++)
 		{
+			if (cptr[y] == 0) continue;   /* skip empty glyph rows */
 			offset = (unsigned int *) &VGA256OFFSET(pVideo, x_cursor, y_cursor + (y << 2));
 			for (mask = 0x80; mask != 0; mask >>= 1)
 			{
@@ -1140,6 +1155,26 @@ struct pcx_header
 	char filler[58];
 };
 #pragma pack (pop)
+
+/*------------------------------------------------------------------------------------------------------- */
+/* Writes one PCX RLE packet: scanline padding (col >= width) is skipped, col wraps at bytes_per_line */
+static void PCXPutRun(unsigned char **dest, unsigned char value, unsigned int bytecount,
+	unsigned int width, unsigned int bpl, unsigned int *col, unsigned int *remaining)
+{
+	while ((bytecount > 0) && (*remaining > 0))
+	{
+		if (*col < width)
+		{
+			*(*dest)++ = value;
+		}
+		if (++(*col) == bpl)
+		{
+			*col = 0;
+		}
+		bytecount--;
+		(*remaining)--;
+	}
+}
 
 /*------------------------------------------------------------------------------------------------------- */
 int VGA256LoadPCX(const char* filename, unsigned char* dest, unsigned char* pal)
@@ -1204,21 +1239,13 @@ int VGA256LoadPCX(const char* filename, unsigned char* dest, unsigned char* pal)
 							}
 							outbyte = buffer[bufptr++];
 						}
-						while ((bytecount > 0) && (remaining > 0))
-						{
-							if (col < width)
-							{
-								*dest++ = (unsigned char) outbyte;
-							}
-							if (++col == bpl)
-							{
-								col = 0;
-							}
-							bytecount--;
-							remaining--;
-						}
+						PCXPutRun(&dest, (unsigned char) outbyte, bytecount, width, bpl, &col, &remaining);
 					}
 					free(buffer);
+					if (remaining > 0)
+					{
+						res = -4;   /* Truncated file */
+					}
 				}
 				else
 				{
@@ -1285,19 +1312,7 @@ int VGA256DecodePCX(unsigned char *dest, const unsigned char *buffer)
 				bytecount = outbyte & 0x3f;
 				outbyte = buffer[bufptr++];
 			}
-			while ((bytecount > 0) && (remaining > 0))
-			{
-				if (col < width)
-				{
-					*dest++ = (unsigned char) outbyte;
-				}
-				if (++col == bpl)
-				{
-					col = 0;
-				}
-				bytecount--;
-				remaining--;
-			}
+			PCXPutRun(&dest, (unsigned char) outbyte, bytecount, width, bpl, &col, &remaining);
 		}
 		/* The palette is stored right after the image, so dest must have room for width * height + 768 bytes */
 		if (buffer[bufptr] == 0x0c) bufptr++;   /* skip PCX-256 palette marker if present */
@@ -1346,6 +1361,7 @@ int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal)
 	int infile = -1;
 	struct bmp_header bmp_header;
 	unsigned char bgra[1024];
+	unsigned char padbuf[4];
 	unsigned int colors, i, padding;
 	long y, step, width, height;
 	int res = -9;
@@ -1378,12 +1394,23 @@ int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal)
 			if (pal)
 			{
 				_lseek(infile, 14 + bmp_header.dib_header_size, SEEK_SET);
-				_read(infile, bgra, colors * 4);
-				for (i = 0; i < colors; i++)
+				if (_read(infile, bgra, colors * 4) == (int) (colors * 4))
 				{
-					pal[i * 3] = bgra[i * 4 + 2] >> 2;
-					pal[i * 3 + 1] = bgra[i * 4 + 1] >> 2;
-					pal[i * 3 + 2] = bgra[i * 4] >> 2;
+					for (i = 0; i < colors; i++)
+					{
+						pal[i * 3] = bgra[i * 4 + 2] >> 2;
+						pal[i * 3 + 1] = bgra[i * 4 + 1] >> 2;
+						pal[i * 3 + 2] = bgra[i * 4] >> 2;
+					}
+					/* Zero the palette entries not present in the file */
+					if (colors < 256)
+					{
+						memset(&pal[colors * 3], 0, (256 - colors) * 3);
+					}
+				}
+				else
+				{
+					res = -2;   /* Palette read failed */
 				}
 			}
 			if (dest)
@@ -1392,10 +1419,14 @@ int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal)
 				_lseek(infile, bmp_header.offset, SEEK_SET);
 				for (i = 0; i < (unsigned int) height; i++)
 				{
-					_read(infile, &dest[y * width], (unsigned int) width);
+					if (_read(infile, &dest[y * width], (unsigned int) width) != width)
+					{
+						res = -4;   /* Truncated file */
+						break;
+					}
 					if (padding)
 					{
-						_lseek(infile, (long) padding, SEEK_CUR);
+						_read(infile, padbuf, padding);   /* discard row padding: cheaper than a seek */
 					}
 					y += step;
 				}
@@ -1416,7 +1447,7 @@ int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal)
 
 
 /*------------------------------------------------------------------------------------------------------- */
-const int VGA256CosDeg[] =
+const short VGA256CosDeg[] =
 {
 	16384, // 0 1.000000
 	16382, // 1 0.999848
@@ -2041,3 +2072,4 @@ const unsigned char VGA256Font[] =
 	0x00, 0x00, 0x7C, 0x7C, 0x7C, 0x7C, 0x00, 0x00,	// Char 254 (.)
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0x7E, 0x00	// Char 255 (.)
 };
+
