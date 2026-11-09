@@ -740,10 +740,20 @@ void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned in
 
 
 /*------------------------------------------------------------------------------------------------------- */
+/* Espera el inicio del retrazo vertical.  Timeout por el contador de
+   tics del BIOS (0x46C, mapeado 1:1 bajo DPMI): evita cuelgues si el
+   bit 3 de 03DAh no cambia (emuladores, paneles LCD, etc.). */
 void VGA256WaitVRetrace(void)
 {
-	while ((inp(0x03DA) & 8) != 0);
-	while ((inp(0x03DA) & 8) == 0);
+	volatile unsigned short *t = (volatile unsigned short *)0x46Cul;
+	unsigned short t0 = t[0];
+	while ((inp(0x03DA) & 8) != 0) {
+		if ((unsigned short)(t[0] - t0) > 2u) return;
+	}
+	t0 = t[0];
+	while ((inp(0x03DA) & 8) == 0) {
+		if ((unsigned short)(t[0] - t0) > 2u) return;
+	}
 }
 
 
