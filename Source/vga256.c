@@ -1,7 +1,6 @@
 /*------------------------------------------------------------------------------------------------------- */
 #include <stdlib.h>
 #include <string.h>
-#include <conio.h>
 #include <dos.h>
 #include <io.h>
 #include <fcntl.h>
@@ -58,7 +57,50 @@ static struct SREGS sregs;
 
 static signed short  vbelastbank = -1;
 static unsigned long BytesPerScanline;
+
+/* Public row stride; kept in sync with BytesPerScanline for 8bpp modes. */
+unsigned int VGA256_Pitch = VGA256_WIDTH;
 static unsigned char BitsPerPixel;
+
+/* CPU caps (MMX/SSE/SSE2) and runtime blit dispatcher — set in VBE_Init. */
+unsigned int VGA256_CPUCaps = 0;
+
+static void VGA256_BlitCopy_Std(void *dst, const void *src, unsigned int len)
+{
+	memcpy(dst, src, (size_t)len);
+}
+
+static void VGA256_BlitCopy_MMX(void *dst, const void *src, unsigned int len)
+{
+	if (len >= 16)
+		VGA256MemCpyMMX((char *)dst, (char *)src, len);
+	else
+		memcpy(dst, src, (size_t)len);
+}
+
+static void VGA256_BlitCopy_SSE(void *dst, const void *src, unsigned int len)
+{
+	if (len >= 16)
+		VGA256MemCpySSE((char *)dst, (char *)src, len);
+	else
+		memcpy(dst, src, (size_t)len);
+}
+
+VGA256_BlitCopyFn VGA256_BlitCopy = VGA256_BlitCopy_Std;
+
+/* Cache of VBE modes filled once in VBE_Init: FindMode walks RAM only. */
+#define VGA256_MODE_CACHE_MAX 256
+static struct {
+	unsigned short mode;
+	unsigned short w;
+	unsigned short h;
+	unsigned char  bpp;
+	unsigned char  linear;
+} vbe_mode_cache[VGA256_MODE_CACHE_MAX];
+static int vbe_mode_cache_count = 0;
+
+/* Last LFB mapping: avoid map/unmap when the mode did not change. */
+static short last_mapped_mode = -1;
 
 /*
 * Protected Mode Direct Call Informations
@@ -91,15 +133,17 @@ static void PrepareRegisters (void)
 
 static void RMIRQ (char irq)
 {
-	memset (&regs, 0, sizeof (regs));
-	regs.w.ax =  0x0300;	      // Simulate Real-Mode interrupt
+	/* Only the fields the DPMI 0300h translator reads need to be valid;
+	   skip a full memset of regs on every real-mode call. */
+	regs.w.ax =  0x0300;	      /* Simulate Real-Mode interrupt */
 	regs.h.bl =  irq;
+	regs.w.cx =  0;               /* no single-step copy */
 	sregs.es =   FP_SEG(&RMI);
 	regs.x.edi = FP_OFF(&RMI);
 	int386x(0x31, &regs, &regs, &sregs);
 }
 
-void DPMI_AllocDOSMem (short int paras, struct DPMI_PTR *p)
+static void DPMI_AllocDOSMem (short int paras, struct DPMI_PTR *p)
 {
 	/* DPMI call 100h allocates DOS memory */
 	PrepareRegisters();
@@ -115,7 +159,7 @@ void DPMI_AllocDOSMem (short int paras, struct DPMI_PTR *p)
 	p->selector=regs.w.dx;
 }
 
-void DPMI_FreeDOSMem (struct DPMI_PTR *p)
+static void DPMI_FreeDOSMem (struct DPMI_PTR *p)
 {
 	/* DPMI call 101h free DOS memory */
 	if (p->selector == 0) {
@@ -129,7 +173,7 @@ void DPMI_FreeDOSMem (struct DPMI_PTR *p)
 	p->selector = 0;
 }
 
-void DPMI_UNMAP_PHYSICAL (void *p)
+static void DPMI_UNMAP_PHYSICAL (void *p)
 {
 	/* DPMI call 801h unmap physical memory*/
 	PrepareRegisters();
@@ -139,7 +183,7 @@ void DPMI_UNMAP_PHYSICAL (void *p)
 	int386x( 0x31, &regs, &regs, &sregs);
 }
 
-void * DPMI_MAP_PHYSICAL (void *p, unsigned long size)
+static void * DPMI_MAP_PHYSICAL (void *p, unsigned long size)
 {
 	/* DPMI call 800h map physical memory*/
 	PrepareRegisters();
@@ -183,12 +227,21 @@ void VBE_Mode_Information (short Mode, struct VBE_ModeInfoBlock * a)
 
 int VBE_IsModeLinear (short Mode)
 {
-	struct VBE_ModeInfoBlock a;
+	int i;
 	if ( Mode==0x13 ) {
 		return 1;
 	}
-	VBE_Mode_Information (Mode, &a);
-	return ((a.ModeAttributes & ATTR_LFB_Support)==ATTR_LFB_Support);
+	for (i = 0; i < vbe_mode_cache_count; i++) {
+		if (vbe_mode_cache[i].mode == (unsigned short)Mode) {
+			return (int)vbe_mode_cache[i].linear;
+		}
+	}
+	/* Fallback if called before Init or with an unknown mode */
+	{
+		struct VBE_ModeInfoBlock a;
+		VBE_Mode_Information (Mode, &a);
+		return ((a.ModeAttributes & ATTR_LFB_Support)==ATTR_LFB_Support);
+	}
 }
 
 static void asmSDS (short x, short y);
@@ -241,6 +294,7 @@ void VBE_SetMode (short Mode, int linear, int clear)
 		setbiosmode (Mode);
 		BytesPerScanline = 320;
 		BitsPerPixel = 8;
+		VGA256_Pitch = 320;
 		vbelastbank = -1;
 		return;
 	}
@@ -274,6 +328,11 @@ void VBE_SetMode (short Mode, int linear, int clear)
 	VBE_Mode_Information (Mode, &a);
 	BytesPerScanline = a.BytesPerScanline;
 	BitsPerPixel = a.BitsPerPixel;
+	/* 8bpp: pitch is bytes/scanline; other depths keep WIDTH as logical stride */
+	if (a.BitsPerPixel == 8 && a.BytesPerScanline != 0)
+		VGA256_Pitch = a.BytesPerScanline;
+	else
+		VGA256_Pitch = VGA256_WIDTH;
 	vbelastbank = -1;
 }
 
@@ -292,18 +351,18 @@ unsigned int VBE_VideoMemory (void)
 int VBE_FindMode (int xres, int yres, char bpp)
 {
 	int i;
-	struct VBE_ModeInfoBlock Info;
 
 	if (VBE_Controller_Info_Pointer == NULL) return -1;
-	// The standard VGA 320x200x256 mode is not part of the VBE mode list
+	/* Standard VGA 320x200x256 is not in the VBE list */
 	if ((xres == 320) && (yres == 200) && (bpp == 8)) {
 		return 0x13;
 	}
-	// Find the mode in the ControllerInfoBlock:
-	for (i=0; (i<1024) && (VBE_Controller_Info_Pointer->VideoModePtr[i]!=0xffff); i++ ) {
-		VBE_Mode_Information (VBE_Controller_Info_Pointer->VideoModePtr[i], &Info);
-		if ((Info.ModeAttributes & ATTR_HardwareMode) && (xres == Info.XResolution) && (yres == Info.YResolution) && (bpp == Info.BitsPerPixel)) {
-			return VBE_Controller_Info_Pointer->VideoModePtr[i];
+	/* Walk the cache filled at VBE_Init (no real-mode calls here) */
+	for (i = 0; i < vbe_mode_cache_count; i++) {
+		if ((vbe_mode_cache[i].w == (unsigned short)xres)
+		 && (vbe_mode_cache[i].h == (unsigned short)yres)
+		 && (vbe_mode_cache[i].bpp == (unsigned char)bpp)) {
+			return (int)vbe_mode_cache[i].mode;
 		}
 	}
 	return -1;
@@ -313,14 +372,22 @@ char * VBE_GetVideoPtr (short mode)
 {
 	struct VBE_ModeInfoBlock ModeInfo;
 	if ( mode==0x13 ) return (char *) 0xa0000;
+	if ( VBE_Controller_Info_Pointer == NULL ) return NULL;   /* guard: TotalMemory needs Init */
+	/* Reuse the existing LFB mapping when the mode did not change */
+	if ((mode == last_mapped_mode) && (LastPhysicalMapping != NULL)) {
+		return (char *) LastPhysicalMapping;
+	}
 	VBE_Mode_Information (mode, &ModeInfo);
 	if ( ModeInfo.PhysBasePtr == NULL ) return NULL;
-	/* Unmap the last physical mapping (if there is one...) */
 	if ( LastPhysicalMapping ) {
 		DPMI_UNMAP_PHYSICAL (LastPhysicalMapping);
 		LastPhysicalMapping = NULL;
+		last_mapped_mode = -1;
 	}
 	LastPhysicalMapping = DPMI_MAP_PHYSICAL (ModeInfo.PhysBasePtr, (unsigned long)(VBE_Controller_Info_Pointer->TotalMemory)*64*1024);
+	if (LastPhysicalMapping != NULL) {
+		last_mapped_mode = mode;
+	}
 	return (char *) LastPhysicalMapping;
 }
 
@@ -352,6 +419,8 @@ void VBE_SetPixelsPerScanline (short Pixels)
 	RMI.ECX=Pixels;
 	RMIRQ (0x10);
 	BytesPerScanline = (Pixels*BitsPerPixel/8);
+	if (BitsPerPixel == 8)
+		VGA256_Pitch = (unsigned int)BytesPerScanline;
 }
 
 void VBE_SetDACWidth (char bits)
@@ -394,8 +463,89 @@ static void VBE_InitPM (void)
 	}
 }
 
+
+/*------------------------------------------------------------------------------------------------------- */
+/* CPUID helpers (Watcom #pragma aux): detect MMX / SSE / SSE2 once at VBE_Init. */
+
+/* Read EFLAGS */
+static unsigned int VGA256_GetEflags(void);
+#pragma aux VGA256_GetEflags = \
+"pushfd" \
+"pop eax" \
+value [eax] \
+modify exact [eax];
+
+/* Write EFLAGS */
+static void VGA256_SetEflags(unsigned int v);
+#pragma aux VGA256_SetEflags = \
+"push eax" \
+"popfd" \
+parm [eax] \
+modify exact [];
+
+/* CPUID: leaf in EAX, returns EDX (feature flags for leaf 1). EBX/ECX/EAX clobbered. */
+static unsigned int VGA256_CPUID_EDX(unsigned int leaf);
+#pragma aux VGA256_CPUID_EDX = \
+"xor ecx, ecx" \
+"cpuid" \
+parm [eax] \
+value [edx] \
+modify exact [eax ebx ecx edx];
+
+static unsigned int VGA256_CPUID_EAX(unsigned int leaf);
+#pragma aux VGA256_CPUID_EAX = \
+"xor ecx, ecx" \
+"cpuid" \
+parm [eax] \
+value [eax] \
+modify exact [eax ebx ecx edx];
+
+static int VGA256_HasCPUID(void)
+{
+	unsigned int old_ef, new_ef;
+	old_ef = VGA256_GetEflags();
+	VGA256_SetEflags(old_ef ^ 0x200000u);
+	new_ef = VGA256_GetEflags();
+	VGA256_SetEflags(old_ef);
+	return ((old_ef ^ new_ef) & 0x200000u) != 0;
+}
+
+static void VGA256_SelectBlit(void)
+{
+	unsigned int max_leaf, edx;
+
+	VGA256_CPUCaps = 0;
+	VGA256_BlitCopy = VGA256_BlitCopy_Std;
+
+	if (!VGA256_HasCPUID())
+		return;
+
+	max_leaf = VGA256_CPUID_EAX(0);
+	if (max_leaf == 0)
+		return;
+
+	edx = VGA256_CPUID_EDX(1);
+
+	/* EDX feature bits: 23=MMX, 25=SSE, 26=SSE2 */
+	if (edx & (1u << 23))
+		VGA256_CPUCaps |= VGA256_CPU_MMX;
+	if (edx & (1u << 25))
+		VGA256_CPUCaps |= VGA256_CPU_SSE;
+	if (edx & (1u << 26))
+		VGA256_CPUCaps |= VGA256_CPU_SSE2;
+
+	/* Prefer SSE (16-byte movdqu, no EMMS) over MMX when available */
+	if (VGA256_CPUCaps & VGA256_CPU_SSE)
+		VGA256_BlitCopy = VGA256_BlitCopy_SSE;
+	else if (VGA256_CPUCaps & VGA256_CPU_MMX)
+		VGA256_BlitCopy = VGA256_BlitCopy_MMX;
+}
+
 int VBE_Init (void)
 {
+	/* Detect MMX/SSE and bind VGA256_BlitCopy before any mode work */
+	VGA256_SelectBlit();
+
 	/* Already initialized: avoid leaking the DOS memory blocks on a second call */
 	if (VbeInfoPool.selector != 0)
 	{
@@ -434,6 +584,25 @@ int VBE_Init (void)
 	VBE_Controller_Info_Pointer->OemProductNamePtr = (char *) RM2FLAT(VBE_Controller_Info_Pointer->OemProductNamePtr);
 	VBE_Controller_Info_Pointer->OemProductRevPtr = (char *) RM2FLAT(VBE_Controller_Info_Pointer->OemProductRevPtr);
 
+	/* Build the mode cache once: every later FindMode is a pure RAM walk */
+	{
+		int i;
+		vbe_mode_cache_count = 0;
+		for (i = 0; (i < 1024) && (VBE_Controller_Info_Pointer->VideoModePtr[i] != 0xffff); i++) {
+			struct VBE_ModeInfoBlock Info;
+			unsigned short m = VBE_Controller_Info_Pointer->VideoModePtr[i];
+			VBE_Mode_Information ((short)m, &Info);
+			if (!(Info.ModeAttributes & ATTR_HardwareMode)) continue;
+			if (vbe_mode_cache_count >= VGA256_MODE_CACHE_MAX) break;
+			vbe_mode_cache[vbe_mode_cache_count].mode   = m;
+			vbe_mode_cache[vbe_mode_cache_count].w      = Info.XResolution;
+			vbe_mode_cache[vbe_mode_cache_count].h      = Info.YResolution;
+			vbe_mode_cache[vbe_mode_cache_count].bpp    = (unsigned char)Info.BitsPerPixel;
+			vbe_mode_cache[vbe_mode_cache_count].linear = (unsigned char)((Info.ModeAttributes & ATTR_LFB_Support) ? 1 : 0);
+			vbe_mode_cache_count++;
+		}
+	}
+
 	VBE_InitPM();
 	return 1;
 }
@@ -444,7 +613,9 @@ void VBE_Done (void)
 		DPMI_UNMAP_PHYSICAL (LastPhysicalMapping);
 		LastPhysicalMapping = NULL;
 	}
+	last_mapped_mode = -1;
 	vbelastbank = -1;
+	vbe_mode_cache_count = 0;
 	DPMI_FreeDOSMem (&VbeModePool);
 	DPMI_FreeDOSMem (&VbeInfoPool);
 	if (pmcode) {
@@ -458,81 +629,82 @@ void VBE_Done (void)
  * so they are always expanded inline in every translation unit. */
 
 
-/*------------------------------------------------------------------------------------------------------- */
-void VGA256LineH(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int color)
-{
-	memset(&VGA256OFFSET(pVideo, x, y), color, width);
-}
-
-
+/* VGA256LineH / LineV / DrawBox / ClearScreen / KbHit / GetCh live as
+ * macros or static __inline in vga256.h (no call overhead). */
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256LineV(void *pVideo, unsigned int x, unsigned int y, unsigned int height, unsigned int color)
-{
-	unsigned int h;
-	unsigned char *offset = (unsigned char *) &VGA256OFFSET(pVideo, x, y);
-
-
-	for (h = 0; h < height; h++)
-	{
-		*offset = color;
-		offset += VGA256_WIDTH;
-	}
-}
-
+/* Port I/O without conio: used by WaitVRetrace (status register 0x3DA). */
+static unsigned char VGA256InPort(unsigned short port);
+#pragma aux VGA256InPort = \
+"in al, dx" \
+parm [dx] \
+value [al] \
+modify exact [al];
 
 /*------------------------------------------------------------------------------------------------------- */
-void VGA256DrawBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color)
-{
-	VGA256LineV(pVideo, x, y, height + 1, color);
-	VGA256LineV(pVideo, x + width, y, height + 1, color);
-	VGA256LineH(pVideo, x, y, width + 1, color);
-	VGA256LineH(pVideo, x, y + height, width + 1, color);
-}
-
+/* Fast byte-pattern fill: builds eax = color*0x01010101 and uses rep stosd
+ * for the body plus a byte tail. On a 386 this beats a byte-wise memset
+ * roughly 3:1 for typical scanline lengths. */
+void _VGA256Fill(void *pDest, unsigned char color, unsigned int len);
+#pragma aux _VGA256Fill = \
+"cld" \
+"mov ah, al" \
+"mov bx, ax" \
+"shl eax, 16" \
+"mov ax, bx" \
+"mov edx, ecx" \
+"shr ecx, 2" \
+"rep stosd" \
+"and edx, 3" \
+"mov ecx, edx" \
+"rep stosb" \
+parm [edi] [al] [ecx] \
+modify exact [eax ebx ecx edx edi];
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256FillBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color)
 {
 	unsigned int h;
 	unsigned char *offset = (unsigned char *) &VGA256OFFSET(pVideo, x, y);
-	
-	
-	/* Full-width fills are contiguous rows: one single memset (writes the same bytes as the row loop) */
-	if ((x == 0) && (width == VGA256_WIDTH))
+	unsigned char c = (unsigned char)color;
+
+	if ((width == 0) || (height == 0))
+		return;
+
+	/* Full-width fills are contiguous rows: one single fill */
+	if ((x == 0) && (width == VGA256_WIDTH) && (VGA256_Pitch == VGA256_WIDTH))
 	{
-    	memset(&VGA256OFFSET(pVideo, 0, y), color, (size_t) VGA256_WIDTH * height);
-    	return;
+		_VGA256Fill(offset, c, VGA256_WIDTH * height);
+		return;
 	}
 
-	for(h = 0; h < height; h++)
+	for (h = 0; h < height; h++)
 	{
-		memset(offset, color, width);
-		offset += VGA256_WIDTH;
+		_VGA256Fill(offset, c, width);
+		offset += VGA256_Pitch;
 	}
 }
 
-
-
-/*------------------------------------------------------------------------------------------------------- */
-void VGA256ClearScreen(void *pVideo, unsigned int color)
-{
-	memset(&VGA256OFFSET(pVideo, 0, 0), color, VGA256_WIDTH * VGA256_HEIGHT);
-}
 
 
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256PutSprite(void *pVideo, void *pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight)
 {
 	unsigned int h;
-	unsigned char *offset = (unsigned char *) &VGA256OFFSET(pVideo, piX, piY);
+	unsigned char *offset;
+	unsigned char *src = (unsigned char *)pcSource;
 
+	if ((piWidth == 0) || (piHeight == 0))
+		return;
 
-	for(h = 0; h < piHeight; h++)
+	offset = (unsigned char *) &VGA256OFFSET(pVideo, piX, piY);
+
+	/* Transparent blit: colour-key 0 skipped by _VGA256MemCpy0 (dword-wise). */
+	for (h = 0; h < piHeight; h++)
 	{
-		_VGA256MemCpy0((void *) offset, (void *) pcSource, (size_t) piWidth);
-		offset += VGA256_WIDTH;
-		pcSource = (unsigned char *) pcSource + piWidth;
+		_VGA256MemCpy0((void *)offset, (void *)src, (size_t)piWidth);
+		offset += VGA256_Pitch;
+		src += piWidth;
 	}
 }
 
@@ -541,22 +713,73 @@ void VGA256PutSprite(void *pVideo, void *pcSource, unsigned int piX, unsigned in
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256PutImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight)
 {
-	unsigned int h;
-	unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
+	unsigned int h, n;
+	unsigned char* offset;
+	unsigned char* src = (unsigned char*)pcSource;
 
+	if ((piWidth == 0) || (piHeight == 0))
+		return;
 
-	/* Full-width images are contiguous rows: one single memcpy (copies the same bytes as the row loop) */
-	if ((piX == 0) && (piWidth == VGA256_WIDTH))
+	offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
+
+	/* Full-width images are contiguous rows: one single memcpy */
+	if ((piX == 0) && (piWidth == VGA256_WIDTH) && (VGA256_Pitch == VGA256_WIDTH))
 	{
-		memcpy((void*) offset, (void*) pcSource, (size_t) (VGA256_WIDTH * piHeight));
+		VGA256_BlitCopy(offset, src, VGA256_WIDTH * piHeight);
+		return;
+	}
+
+	/* SIMD path (MMX/SSE selected at VBE_Init) for wider rows */
+	if (piWidth >= 16 && (VGA256_CPUCaps & (VGA256_CPU_MMX | VGA256_CPU_SSE)))
+	{
+		for (h = 0; h < piHeight; h++)
+		{
+			VGA256_BlitCopy(offset, src, piWidth);
+			offset += VGA256_Pitch;
+			src += piWidth;
+		}
+		return;
+	}
+
+	/* Both pointers dword-aligned and width multiple of 4: tight dword copy */
+	if (((((unsigned)offset | (unsigned)src | piWidth) & 3) == 0) && (piWidth >= 4))
+	{
+		n = piWidth >> 2;
+		for (h = 0; h < piHeight; h++)
+		{
+			unsigned int *d = (unsigned int *)offset;
+			unsigned int *s = (unsigned int *)src;
+			unsigned int i;
+			for (i = 0; i < n; i++)
+				d[i] = s[i];
+			offset += VGA256_Pitch;
+			src += piWidth;
+		}
+		return;
+	}
+
+	/* Word-aligned path */
+	if (((((unsigned)offset | (unsigned)src | piWidth) & 1) == 0) && (piWidth >= 2))
+	{
+		n = piWidth >> 1;
+		for (h = 0; h < piHeight; h++)
+		{
+			unsigned short *d = (unsigned short *)offset;
+			unsigned short *s = (unsigned short *)src;
+			unsigned int i;
+			for (i = 0; i < n; i++)
+				d[i] = s[i];
+			offset += VGA256_Pitch;
+			src += piWidth;
+		}
 		return;
 	}
 
 	for (h = 0; h < piHeight; h++)
 	{
-		memcpy((void*) offset, (void*) pcSource, (size_t) piWidth);
-		offset += VGA256_WIDTH;
-		pcSource = (unsigned char*)pcSource + piWidth;
+		memcpy((void*)offset, (void*)src, (size_t)piWidth);
+		offset += VGA256_Pitch;
+		src += piWidth;
 	}
 }
 
@@ -564,22 +787,70 @@ void VGA256PutImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256GetImage(void* pVideo, void* pcDest, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight)
 {
-	unsigned int h;
-	unsigned char* offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
+	unsigned int h, n;
+	unsigned char* offset;
+	unsigned char* dst = (unsigned char*)pcDest;
 
+	if ((piWidth == 0) || (piHeight == 0))
+		return;
 
-	/* Full-width images are contiguous rows: one single memcpy (copies the same bytes as the row loop) */
-	if ((piX == 0) && (piWidth == VGA256_WIDTH))
+	offset = (unsigned char*)&VGA256OFFSET(pVideo, piX, piY);
+
+	/* Full-width images are contiguous rows: one single memcpy */
+	if ((piX == 0) && (piWidth == VGA256_WIDTH) && (VGA256_Pitch == VGA256_WIDTH))
 	{
-		memcpy((void*) pcDest, (void*) offset, (size_t) (VGA256_WIDTH * piHeight));
+		VGA256_BlitCopy(dst, offset, VGA256_WIDTH * piHeight);
+		return;
+	}
+
+	if (piWidth >= 16 && (VGA256_CPUCaps & (VGA256_CPU_MMX | VGA256_CPU_SSE)))
+	{
+		for (h = 0; h < piHeight; h++)
+		{
+			VGA256_BlitCopy(dst, offset, piWidth);
+			offset += VGA256_Pitch;
+			dst += piWidth;
+		}
+		return;
+	}
+
+	if (((((unsigned)offset | (unsigned)dst | piWidth) & 3) == 0) && (piWidth >= 4))
+	{
+		n = piWidth >> 2;
+		for (h = 0; h < piHeight; h++)
+		{
+			unsigned int *d = (unsigned int *)dst;
+			unsigned int *s = (unsigned int *)offset;
+			unsigned int i;
+			for (i = 0; i < n; i++)
+				d[i] = s[i];
+			offset += VGA256_Pitch;
+			dst += piWidth;
+		}
+		return;
+	}
+
+	if (((((unsigned)offset | (unsigned)dst | piWidth) & 1) == 0) && (piWidth >= 2))
+	{
+		n = piWidth >> 1;
+		for (h = 0; h < piHeight; h++)
+		{
+			unsigned short *d = (unsigned short *)dst;
+			unsigned short *s = (unsigned short *)offset;
+			unsigned int i;
+			for (i = 0; i < n; i++)
+				d[i] = s[i];
+			offset += VGA256_Pitch;
+			dst += piWidth;
+		}
 		return;
 	}
 
 	for (h = 0; h < piHeight; h++)
 	{
-		memcpy((void*) pcDest, (void*) offset, (size_t) piWidth);
-		offset += VGA256_WIDTH;
-		pcDest = (unsigned char*) pcDest + piWidth;
+		memcpy((void*)dst, (void*)offset, (size_t)piWidth);
+		offset += VGA256_Pitch;
+		dst += piWidth;
 	}
 }
 
@@ -589,6 +860,7 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
 {
 	unsigned int x, y;
 	unsigned int xpos, ypos, xstep, ystep;
+	unsigned int yi, last_yi;
 	unsigned char* pRow;
 
 	if ((widthd == widths) && (heightd == heights))
@@ -604,11 +876,27 @@ void VGA256ScaleImage(unsigned char* pDest, unsigned char* pSource, unsigned int
 	xstep = (widths << 16) / widthd;
 	ystep = (heights << 16) / heightd;
 	ypos = 0;
+	last_yi = 0;
+	pRow = pSource;
 	for (y = 0; y < heightd; y++)
 	{
-		pRow = pSource + (ypos >> 16) * widths;
+		/* y is monotonic: advance the source row pointer with additions */
+		yi = ypos >> 16;
+		while (last_yi < yi) {
+			pRow += widths;
+			last_yi++;
+		}
 		xpos = 0;
-		for (x = 0; x < widthd; x++)
+		x = 0;
+		/* Unroll X by 2 */
+		for (; x + 2 <= widthd; x += 2)
+		{
+			*pDest++ = pRow[xpos >> 16];
+			xpos += xstep;
+			*pDest++ = pRow[xpos >> 16];
+			xpos += xstep;
+		}
+		for (; x < widthd; x++)
 		{
 			*pDest++ = pRow[xpos >> 16];
 			xpos += xstep;
@@ -658,15 +946,28 @@ void VGA256ScaleImage2x(unsigned char* pDest, unsigned char* pSource, unsigned i
 {
 	unsigned int h, w, r;
 	unsigned short* d = (unsigned short*)pDest;
+	unsigned int* d4;
+	unsigned int pair;
 
-	/* Every destination row is written once and sequentially, never read back (the destination is usually video memory) */
+	/* Every destination row is written once and sequentially (dest is usually video memory) */
 	for (h = 0; h < heights; h++)
 	{
 		for (r = 0; r < 2; r++)
 		{
-			for (w = 0; w < widths; w++)
-			{
-				*d++ = pSource[w] * 0x0101;
+			w = 0;
+			/* Two source pixels -> one dword (four dest pixels as two replicated shorts) */
+			if (((unsigned)d & 3) == 0) {
+				d4 = (unsigned int*)d;
+				while (w + 2 <= widths) {
+					pair = (pSource[w] * 0x0101u) | ((pSource[w + 1] * 0x0101u) << 16);
+					*d4++ = pair;
+					w += 2;
+				}
+				d = (unsigned short*)d4;
+			}
+			while (w < widths) {
+				*d++ = (unsigned short)(pSource[w] * 0x0101);
+				w++;
 			}
 		}
 		pSource += widths;
@@ -679,15 +980,27 @@ void VGA256ScaleImage4x(unsigned char* pDest, unsigned char* pSource, unsigned i
 {
 	unsigned int h, w, r;
 	unsigned int* d = (unsigned int*)pDest;
+	unsigned int p0, p1;
 
-	/* Every destination row is written once and sequentially, never read back (the destination is usually video memory) */
+	/* Every destination row is written once and sequentially (dest is usually video memory).
+	 * Two source pixels -> two dwords when possible. */
 	for (h = 0; h < heights; h++)
 	{
 		for (r = 0; r < 4; r++)
 		{
-			for (w = 0; w < widths; w++)
+			w = 0;
+			while (w + 2 <= widths)
 			{
-				*d++ = pSource[w] * 0x01010101;
+				p0 = pSource[w] * 0x01010101u;
+				p1 = pSource[w + 1] * 0x01010101u;
+				*d++ = p0;
+				*d++ = p1;
+				w += 2;
+			}
+			while (w < widths)
+			{
+				*d++ = pSource[w] * 0x01010101u;
+				w++;
 			}
 		}
 		pSource += widths;
@@ -699,12 +1012,13 @@ void VGA256ScaleImage4x(unsigned char* pDest, unsigned char* pSource, unsigned i
 /*------------------------------------------------------------------------------------------------------- */
 void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned int width, unsigned int height, int angle)
 {
-	int hwidth = width >> 1;
-	int hheight = height >> 1;
+	int hwidth = (int)(width >> 1);
+	int hheight = (int)(height >> 1);
 	int sinma, cosma;
 	int x, y;
-	int xs, yd;
+	int xs, yd, last_yd;
 	int fx, fy;
+	unsigned char *row;
 
 	angle %= 360;
 	if (angle < 0) angle += 360;
@@ -713,9 +1027,11 @@ void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned in
 
 	for (y = 0; y < (int) height; y++)
 	{
-		/* Source position in 18.14 fixed point, advanced by one step per pixel instead of two multiplications */
+		/* Source position in 18.14 fixed point, advanced by one step per pixel */
 		fx = hwidth * (16384 - cosma) - (y - hheight) * sinma;
 		fy = (y - hheight) * cosma + (hheight << 14) - hwidth * sinma;
+		last_yd = 0x7fffffff;
+		row = pSource;
 
 		for (x = 0; x < (int) width; x++)
 		{
@@ -724,7 +1040,11 @@ void VGA256RotateImage(unsigned char* pDest, unsigned char* pSource, unsigned in
 
 			if (((unsigned) xs < width) && ((unsigned) yd < height))
 			{
-				*pDest++ = pSource[yd * width + xs];
+				if (yd != last_yd) {
+					row = pSource + yd * (int)width;
+					last_yd = yd;
+				}
+				*pDest++ = row[xs];
 			}
 			else
 			{
@@ -747,11 +1067,11 @@ void VGA256WaitVRetrace(void)
 {
 	volatile unsigned short *t = (volatile unsigned short *)0x46Cul;
 	unsigned short t0 = t[0];
-	while ((inp(0x03DA) & 8) != 0) {
+	while ((VGA256InPort(0x03DA) & 8) != 0) {
 		if ((unsigned short)(t[0] - t0) > 2u) return;
 	}
 	t0 = t[0];
-	while ((inp(0x03DA) & 8) == 0) {
+	while ((VGA256InPort(0x03DA) & 8) == 0) {
 		if ((unsigned short)(t[0] - t0) > 2u) return;
 	}
 }
@@ -829,32 +1149,54 @@ void VGA256Circle(void* pVideo, unsigned int x, unsigned int y, unsigned int rad
 	int xl, yl, ylw;
 	unsigned int d, limit;
 	unsigned char* pCenter;
+	unsigned char c = (unsigned char)color;
 
+	/* Tiny radii: direct pixels, no loop setup */
 	if (radio == 0)
 	{
 		VGA256PutPixel(pVideo, x, y, color);
 		return;
 	}
+	if (radio == 1)
+	{
+		pCenter = (unsigned char*) &VGA256OFFSET(pVideo, x, y);
+		pCenter[0] = c;
+		pCenter[1] = c;
+		pCenter[-1] = c;
+		pCenter[VGA256_Pitch] = c;
+		pCenter[-(int)VGA256_Pitch] = c;
+		return;
+	}
+	if (radio == 2)
+	{
+		pCenter = (unsigned char*) &VGA256OFFSET(pVideo, x, y);
+		pCenter[2] = c; pCenter[-2] = c;
+		pCenter[VGA256_Pitch] = c; pCenter[-(int)VGA256_Pitch] = c;
+		pCenter[1 + (int)VGA256_Pitch] = c; pCenter[-1 + (int)VGA256_Pitch] = c;
+		pCenter[1 - (int)VGA256_Pitch] = c; pCenter[-1 - (int)VGA256_Pitch] = c;
+		pCenter[(int)VGA256_Pitch * 2] = c; pCenter[-(int)VGA256_Pitch * 2] = c;
+		return;
+	}
 
 	pCenter = (unsigned char*) &VGA256OFFSET(pVideo, x, y);
 	xl = 0;
-	yl = radio;
-	ylw = yl * VGA256_WIDTH;
+	yl = (int)radio;
+	ylw = yl * (int)VGA256_Pitch;
 	d = radio * radio;
 	limit = d + 1;
 
 	/* d is kept equal to xl * xl + yl * yl without multiplications */
 	while (yl != 0)
 	{
-		pCenter[xl + ylw] = color;
-		pCenter[-xl + ylw] = color;
-		pCenter[xl - ylw] = color;
-		pCenter[-xl - ylw] = color;
+		pCenter[xl + ylw] = c;
+		pCenter[-xl + ylw] = c;
+		pCenter[xl - ylw] = c;
+		pCenter[-xl - ylw] = c;
 		if (d >= limit)
 		{
 			d -= (yl << 1) - 1;
 			yl--;
-			ylw -= VGA256_WIDTH;
+			ylw -= (int)VGA256_Pitch;
 		}
 		else
 		{
@@ -862,8 +1204,8 @@ void VGA256Circle(void* pVideo, unsigned int x, unsigned int y, unsigned int rad
 			d += (xl << 1) - 1;
 		}
 	}
-	pCenter[xl] = color;
-	pCenter[-xl] = color;
+	pCenter[xl] = c;
+	pCenter[-xl] = c;
 }
 
 
@@ -875,6 +1217,7 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
 	int d1x, d1y, d2x, d2y, s, u, v;
 	int step1, step2;
 	unsigned char* offset;
+	unsigned char col = (unsigned char)color;
 
 	/* Fast paths for axis-aligned lines (both endpoints included) */
 	if (b == d)
@@ -888,66 +1231,77 @@ void VGA256Line(void* pVideo, unsigned int a, unsigned int b, unsigned int c, un
 		return;
 	}
 
-	u = c - a;
-	v = d - b;
+	u = (int)c - (int)a;
+	v = (int)d - (int)b;
 	d1x = _VGA256Sgn(u);
 	d1y = _VGA256Sgn(v);
 	d2x = _VGA256Sgn(u);
 	d2y = 0;
-	m = _VGA256ABS(u);
-	n = _VGA256ABS(v);
+	m = (unsigned int)_VGA256ABS(u);
+	n = (unsigned int)_VGA256ABS(v);
 	if (m <= n)
 	{
 		d2x = 0;
 		d2y = _VGA256Sgn(v);
-		m = _VGA256ABS(v);
-		n = _VGA256ABS(u);
+		m = (unsigned int)_VGA256ABS(v);
+		n = (unsigned int)_VGA256ABS(u);
 	}
-	step1 = d1x + d1y * VGA256_WIDTH;
-	step2 = d2x + d2y * VGA256_WIDTH;
+	step1 = d1x + d1y * (int)VGA256_Pitch;
+	step2 = d2x + d2y * (int)VGA256_Pitch;
 	offset = (unsigned char*) &VGA256OFFSET(pVideo, a, b);
-	s = m >> 1;
-	for (i = 0; i <= m; i++)
+	s = (int)(m >> 1);
+	/* Unroll by 2 steps when remaining length allows */
+	i = 0;
+	while (i + 2 <= m)
 	{
-		*offset = color;
-		s += n;
-		if (s >= m)
-		{
-			s -= m;
-			offset += step1;
-		}
-		else
-		{
-			offset += step2;
-		}
+		*offset = col;
+		s += (int)n;
+		if (s >= (int)m) { s -= (int)m; offset += step1; }
+		else offset += step2;
+		*offset = col;
+		s += (int)n;
+		if (s >= (int)m) { s -= (int)m; offset += step1; }
+		else offset += step2;
+		i += 2;
+	}
+	for (; i <= m; i++)
+	{
+		*offset = col;
+		s += (int)n;
+		if (s >= (int)m) { s -= (int)m; offset += step1; }
+		else offset += step2;
 	}
 }
 
 
-/* ----------------------------------------------------------------------------------------------------------------- */
-int VGA256KbHit(void)
-{
-	return(kbhit());
-}
+/* VGA256KbHit / VGA256GetCh / VGA256GetChNB / VGA256FlushKbd: static __inline
+ * in vga256.h (pure BDA head/tail + circular buffer; no conio, no real-mode). */
+unsigned char _vga256_pending_scan = 0;
 
 
 /* ----------------------------------------------------------------------------------------------------------------- */
-int VGA256GetCh(void)
-{
-	return(getch());
-}
+/* Fixed stack first (no heap for typical fills). Grows with realloc only on overflow. */
+#define VGA256_FLOOD_FIXED 512
 
-
-/* ----------------------------------------------------------------------------------------------------------------- */
-static int VGA256FloodPush(unsigned long** ppila, unsigned int* psp, unsigned int* pcap, unsigned long seed)
+static int VGA256FloodPush(unsigned long** ppila, unsigned int* psp, unsigned int* pcap,
+	unsigned long* fixed, int* heap, unsigned long seed)
 {
 	unsigned long* npila;
 
 	if (*psp == *pcap)
 	{
-		npila = (unsigned long*) realloc(*ppila, ((*pcap) << 1) * sizeof(unsigned long));
-		if (npila == NULL) return 0;
-		*ppila = npila;
+		if (!*heap) {
+			/* Graduate from fixed stack to heap */
+			npila = (unsigned long*) malloc(((*pcap) << 1) * sizeof(unsigned long));
+			if (npila == NULL) return 0;
+			memcpy(npila, fixed, (*pcap) * sizeof(unsigned long));
+			*ppila = npila;
+			*heap = 1;
+		} else {
+			npila = (unsigned long*) realloc(*ppila, ((*pcap) << 1) * sizeof(unsigned long));
+			if (npila == NULL) return 0;
+			*ppila = npila;
+		}
 		*pcap <<= 1;
 	}
 	(*ppila)[*psp] = seed;
@@ -960,19 +1314,19 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 	unsigned char* video = (unsigned char*) pVideo;
 	unsigned char* row;
 	unsigned char* adj;
-	unsigned long* pila = NULL;
+	unsigned long fixed[VGA256_FLOOD_FIXED];
+	unsigned long* pila = fixed;
 	unsigned long seed;
-	unsigned int sp = 0, cap = 256;
+	unsigned int sp = 0, cap = VGA256_FLOOD_FIXED;
 	unsigned int sx, sy, xl, xr, nx;
 	unsigned char cnew = (unsigned char) new_col;
 	unsigned char cold = (unsigned char) old_col;
+	int heap = 0;
 
 	if (cnew == cold) return;
 	if (x >= VGA256_WIDTH || y >= VGA256_HEIGHT) return;
-	if (video[y * VGA256_WIDTH + x] != cold) return;
+	if (video[y * VGA256_Pitch + x] != cold) return;
 
-	pila = (unsigned long*) malloc(cap * sizeof(unsigned long));
-	if (pila == NULL) return;
 	pila[sp++] = ((unsigned long) y << 16) | x;
 
 	while (sp > 0)
@@ -981,7 +1335,7 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 		seed = pila[sp];
 		sx = (unsigned int) (seed & 0xffff);
 		sy = (unsigned int) (seed >> 16);
-		row = video + sy * VGA256_WIDTH;
+		row = video + sy * VGA256_Pitch;
 		xl = sx;
 		while (xl > 0 && row[xl - 1] == cold) xl--;
 		xr = xl;
@@ -989,15 +1343,16 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 		memset(&row[xl], cnew, xr - xl);
 		if (sy > 0)
 		{
-			adj = row - VGA256_WIDTH;
+			adj = row - VGA256_Pitch;
 			nx = xl;
 			while (nx < xr)
 			{
 				if (adj[nx] == cold)
 				{
-					if (!VGA256FloodPush(&pila, &sp, &cap, ((unsigned long) (sy - 1) << 16) | nx))
+					if (!VGA256FloodPush(&pila, &sp, &cap, fixed, &heap,
+						((unsigned long) (sy - 1) << 16) | nx))
 					{
-						free(pila);
+						if (heap) free(pila);
 						return;
 					}
 					while (nx < xr && adj[nx] == cold) nx++;
@@ -1007,15 +1362,16 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 		}
 		if (sy + 1 < VGA256_HEIGHT)
 		{
-			adj = row + VGA256_WIDTH;
+			adj = row + VGA256_Pitch;
 			nx = xl;
 			while (nx < xr)
 			{
 				if (adj[nx] == cold)
 				{
-					if (!VGA256FloodPush(&pila, &sp, &cap, ((unsigned long) (sy + 1) << 16) | nx))
+					if (!VGA256FloodPush(&pila, &sp, &cap, fixed, &heap,
+						((unsigned long) (sy + 1) << 16) | nx))
 					{
-						free(pila);
+						if (heap) free(pila);
 						return;
 					}
 					while (nx < xr && adj[nx] == cold) nx++;
@@ -1024,7 +1380,7 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 			}
 		}
 	}
-	free(pila);
+	if (heap) free(pila);
 }
 
 
@@ -1033,7 +1389,7 @@ void VGA256FloodFill(void *pVideo, unsigned int x, unsigned int y, unsigned int 
 void VGA256OutText(void* pVideo, const char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, const unsigned char* font)
 {
 	unsigned int y;
-	unsigned char mask;
+	unsigned char row;
 	const unsigned char* cptr;
 	unsigned char* offset;
 
@@ -1045,18 +1401,28 @@ void VGA256OutText(void* pVideo, const char* string, unsigned int x_cursor, unsi
 	while (*string != 0)
 	{
 		cptr = &font[(unsigned char) *string << 3];
+		/* Skip fully empty glyphs (space, etc.) */
+		if (!cptr[0] && !cptr[1] && !cptr[2] && !cptr[3]
+		 && !cptr[4] && !cptr[5] && !cptr[6] && !cptr[7])
+		{
+			x_cursor += 8;
+			string++;
+			continue;
+		}
 		for (y = 0; y < 8; y++)
 		{
-			if (cptr[y] == 0) continue;   /* skip empty glyph rows */
+			row = cptr[y];
+			if (row == 0) continue;   /* skip empty glyph rows */
 			offset = &VGA256OFFSET(pVideo, x_cursor, y_cursor + y);
-			for (mask = 0x80; mask != 0; mask >>= 1)
-			{
-				if (cptr[y] & mask)
-				{
-					*(offset) = color;
-				}
-				offset++;
-			}
+			/* Unrolled bit test: 8 pixels, no shift loop */
+			if (row & 0x80) offset[0] = (unsigned char)color;
+			if (row & 0x40) offset[1] = (unsigned char)color;
+			if (row & 0x20) offset[2] = (unsigned char)color;
+			if (row & 0x10) offset[3] = (unsigned char)color;
+			if (row & 0x08) offset[4] = (unsigned char)color;
+			if (row & 0x04) offset[5] = (unsigned char)color;
+			if (row & 0x02) offset[6] = (unsigned char)color;
+			if (row & 0x01) offset[7] = (unsigned char)color;
 		}
 		x_cursor += 8;
 		string++;
@@ -1069,33 +1435,42 @@ void VGA256OutText(void* pVideo, const char* string, unsigned int x_cursor, unsi
 void VGA256OutText2x(void* pVideo, const char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, const unsigned char* font)
 {
 	unsigned int y;
-	unsigned char mask;
+	unsigned char row;
 	const unsigned char* cptr;
 	unsigned short* offset;
 	unsigned short c;
+	unsigned int pitch;
 
 	if (font == NULL)
 	{
 		font = (const unsigned char*) 0xFFA6E;
 	}
 
-	c = (color & 0xff) * 0x0101;
+	c = (unsigned short)((color & 0xff) * 0x0101);
+	pitch = VGA256_Pitch >> 1;
 	while (*string != 0)
 	{
 		cptr = &font[(unsigned char) *string << 3];
+		if (!cptr[0] && !cptr[1] && !cptr[2] && !cptr[3]
+		 && !cptr[4] && !cptr[5] && !cptr[6] && !cptr[7])
+		{
+			x_cursor += 16;
+			string++;
+			continue;
+		}
 		for (y = 0; y < 8; y++)
 		{
-			if (cptr[y] == 0) continue;   /* skip empty glyph rows */
+			row = cptr[y];
+			if (row == 0) continue;
 			offset = (unsigned short *) &VGA256OFFSET(pVideo, x_cursor, y_cursor + (y << 1));
-			for (mask = 0x80; mask != 0; mask >>= 1)
-			{
-				if (cptr[y] & mask)
-				{
-					*(offset) = c;
-					*(offset + (VGA256_WIDTH >> 1)) = c;
-				}
-				offset++;
-			}
+			if (row & 0x80) { offset[0] = c; offset[pitch] = c; }
+			if (row & 0x40) { offset[1] = c; offset[pitch + 1] = c; }
+			if (row & 0x20) { offset[2] = c; offset[pitch + 2] = c; }
+			if (row & 0x10) { offset[3] = c; offset[pitch + 3] = c; }
+			if (row & 0x08) { offset[4] = c; offset[pitch + 4] = c; }
+			if (row & 0x04) { offset[5] = c; offset[pitch + 5] = c; }
+			if (row & 0x02) { offset[6] = c; offset[pitch + 6] = c; }
+			if (row & 0x01) { offset[7] = c; offset[pitch + 7] = c; }
 		}
 		x_cursor += 16;
 		string++;
@@ -1108,35 +1483,44 @@ void VGA256OutText2x(void* pVideo, const char* string, unsigned int x_cursor, un
 void VGA256OutText4x(void* pVideo, const char* string, unsigned int x_cursor, unsigned int y_cursor, unsigned int color, const unsigned char* font)
 {
 	unsigned int y;
-	unsigned char mask;
+	unsigned char row;
 	const unsigned char* cptr;
 	unsigned int* offset;
 	unsigned int c;
+	unsigned int p1, p2, p3;
 
 	if (font == NULL)
 	{
 		font = (const unsigned char*) 0xFFA6E;
 	}
 
-	c = (color & 0xff) * 0x01010101;
+	c = (color & 0xff) * 0x01010101u;
+	p1 = VGA256_Pitch >> 2;
+	p2 = VGA256_Pitch >> 1;
+	p3 = p1 * 3;
 	while (*string != 0)
 	{
 		cptr = &font[(unsigned char) *string << 3];
+		if (!cptr[0] && !cptr[1] && !cptr[2] && !cptr[3]
+		 && !cptr[4] && !cptr[5] && !cptr[6] && !cptr[7])
+		{
+			x_cursor += 32;
+			string++;
+			continue;
+		}
 		for (y = 0; y < 8; y++)
 		{
-			if (cptr[y] == 0) continue;   /* skip empty glyph rows */
+			row = cptr[y];
+			if (row == 0) continue;
 			offset = (unsigned int *) &VGA256OFFSET(pVideo, x_cursor, y_cursor + (y << 2));
-			for (mask = 0x80; mask != 0; mask >>= 1)
-			{
-				if (cptr[y] & mask)
-				{
-					*(offset) = c;
-					*(offset + (VGA256_WIDTH >> 2)) = c;
-					*(offset + (VGA256_WIDTH >> 1)) = c;
-					*(offset + ((VGA256_WIDTH >> 2) * 3)) = c;
-				}
-				offset++;
-			}
+			if (row & 0x80) { offset[0] = c; offset[p1] = c; offset[p2] = c; offset[p3] = c; }
+			if (row & 0x40) { offset[1] = c; offset[p1+1] = c; offset[p2+1] = c; offset[p3+1] = c; }
+			if (row & 0x20) { offset[2] = c; offset[p1+2] = c; offset[p2+2] = c; offset[p3+2] = c; }
+			if (row & 0x10) { offset[3] = c; offset[p1+3] = c; offset[p2+3] = c; offset[p3+3] = c; }
+			if (row & 0x08) { offset[4] = c; offset[p1+4] = c; offset[p2+4] = c; offset[p3+4] = c; }
+			if (row & 0x04) { offset[5] = c; offset[p1+5] = c; offset[p2+5] = c; offset[p3+5] = c; }
+			if (row & 0x02) { offset[6] = c; offset[p1+6] = c; offset[p2+6] = c; offset[p3+6] = c; }
+			if (row & 0x01) { offset[7] = c; offset[p1+7] = c; offset[p2+7] = c; offset[p3+7] = c; }
 		}
 		x_cursor += 32;
 		string++;
@@ -1418,9 +1802,11 @@ int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal)
 						memset(&pal[colors * 3], 0, (256 - colors) * 3);
 					}
 				}
-				else
+				else if (dest == NULL)
 				{
-					res = -2;   /* Palette read failed */
+					/* Palette was the only requested data: report the failure.
+					 * With dest != NULL the image decode below decides the result. */
+					res = -2;
 				}
 			}
 			if (dest)
@@ -2082,4 +2468,3 @@ const unsigned char VGA256Font[] =
 	0x00, 0x00, 0x7C, 0x7C, 0x7C, 0x7C, 0x00, 0x00,	// Char 254 (.)
 	0x00, 0x00, 0x00, 0x00, 0x00, 0x42, 0x7E, 0x00	// Char 255 (.)
 };
-

@@ -116,10 +116,7 @@ struct  VBE_ModeInfoBlock
 
 int VBE_Init (void);
 void VBE_Done (void);
-void DPMI_AllocDOSMem (short int paras, struct DPMI_PTR *p);
-void DPMI_FreeDOSMem (struct DPMI_PTR *p);
-void * DPMI_MAP_PHYSICAL (void *p, unsigned long size);
-void DPMI_UNMAP_PHYSICAL (void *p);
+/* DPMI_* are internal to vga256.c (static); not part of the public API. */
 int VBE_Test (void);
 void VBE_Controller_Information  (struct VBE_VbeInfoBlock * a);
 int VBE_IsModeLinear (short Mode);
@@ -156,23 +153,32 @@ int VBE_8BitDAC (void);
 
 
 /*------------------------------------------------------------------------------------------------------- */
+/* Row stride in bytes.  Equals VGA256_WIDTH for standard packed modes; updated by
+ * VBE_SetMode when the mode's BytesPerScanline differs (banked/padding). */
+extern unsigned int VGA256_Pitch;
+
+/* CPU feature bits filled by VBE_Init (CPUID). */
+#define VGA256_CPU_MMX   0x00000001u
+#define VGA256_CPU_SSE   0x00000002u
+#define VGA256_CPU_SSE2  0x00000004u
+extern unsigned int VGA256_CPUCaps;
+
+/* Runtime blit: points to memcpy, MMX or SSE copy after VBE_Init. */
+typedef void (*VGA256_BlitCopyFn)(void *dst, const void *src, unsigned int len);
+extern VGA256_BlitCopyFn VGA256_BlitCopy;
+
 /* Per-pixel accessors are macros so they are always expanded inline: the cost of a function
  * call was an order of magnitude bigger than the single store/load they perform.
- * Beware: arguments are evaluated more than once, they must not have side effects. */
-#if defined(VGA256_MODE_320X200X8)
-	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 8) + ((y) << 6) + (x)])
-#elif defined(VGA256_MODE_640X400X8) || defined(VGA256_MODE_640X480X8)
-	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 9) + ((y) << 7) + (x)])
-#elif defined(VGA256_MODE_1024X768X8)
-	#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[((y) << 10) + (x)])
-#endif
+ * Beware: arguments are evaluated more than once, they must not have side effects.
+ * Uses VGA256_Pitch so non-standard scanline pitches are correct. */
+#define VGA256OFFSET(pVideo, x, y) (((unsigned char *) (pVideo))[(y) * VGA256_Pitch + (x)])
 
 #define VGA256PutPixel(pVideo, x, y, color) (VGA256OFFSET(pVideo, x, y) = (unsigned char) (color))
 #define VGA256GetPixel(pVideo, x, y) ((unsigned int) VGA256OFFSET(pVideo, x, y))
 
 
 /*------------------------------------------------------------------------------------------------------- */
-#define VGA256PutScreen(pVideo, b) (memcpy(pVideo, b, VGA256_WIDTH * VGA256_HEIGHT))
+#define VGA256PutScreen(pVideo, b) (memcpy(pVideo, b, (size_t)VGA256_Pitch * (size_t)VGA256_HEIGHT))
 #define _VGA256ABS(a) (((a) < 0) ? -(a) : (a))
 #define _VGA256Sgn(a) ((a) > 0 ? 1 : ((a) < 0 ? -1 : 0))
 
@@ -180,11 +186,114 @@ int VBE_8BitDAC (void);
 /*------------------------------------------------------------------------------------------------------- */
 extern const short VGA256CosDeg[];
 extern const unsigned char VGA256Font[];
-void VGA256LineH(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int color);
-void VGA256LineV(void *pVideo, unsigned int x, unsigned int y, unsigned int height, unsigned int color);
-void VGA256DrawBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color);
+
+/* Hot-path helpers: macros / static __inline in the header so every TU
+ * expands them without a call.  Arguments must not have side effects
+ * (same rule as VGA256OFFSET). */
+
+/* Fast byte-pattern fill: rep stosd main body + byte tail. Faster than
+ * memset on a 386 for the typical scanline widths. */
+void _VGA256Fill(void *pDest, unsigned char color, unsigned int len);
+
+#define VGA256LineH(pVideo, x, y, width, color) \
+	(_VGA256Fill(&VGA256OFFSET((pVideo), (x), (y)), (unsigned char)(color), (unsigned int)(width)))
+
+#define VGA256ClearScreen(pVideo, color) \
+	(_VGA256Fill((void *)(pVideo), (unsigned char)(color), (size_t)VGA256_Pitch * (size_t)VGA256_HEIGHT))
+
+/* BDA keyboard buffer (0040:001A head / 0040:001C tail == linear 0x41A/0x41C
+ * under DPMI 1:1).  Buffer itself sits at 0040:001E..003D (16 words, circular).
+ * Pure protected-mode access: no real-mode transition, no conio dependency. */
+#define VGA256_KBD_HEAD   ((volatile unsigned short *)0x41Aul)
+#define VGA256_KBD_TAIL   ((volatile unsigned short *)0x41Cul)
+#define VGA256_KBD_START  0x1E
+#define VGA256_KBD_END    0x3E
+
+/* Pending scan-code for extended keys (ASCII==0): matches conio getch()
+ * two-call protocol without ever calling the library. Defined in vga256.c */
+extern unsigned char _vga256_pending_scan;
+
+static __inline int VGA256KbHit(void)
+{
+	if (_vga256_pending_scan)
+		return 1;
+	return VGA256_KBD_HEAD[0] != VGA256_KBD_TAIL[0];
+}
+
+/* Non-blocking: returns -1 when the buffer is empty.
+ * Extended keys (ASCII==0) return 0 first, then the scan code on the next call
+ * (same protocol as Watcom/conio getch). */
+static __inline int VGA256GetChNB(void)
+{
+	unsigned short head, word;
+	unsigned char ascii, scan;
+
+	if (_vga256_pending_scan) {
+		scan = _vga256_pending_scan;
+		_vga256_pending_scan = 0;
+		return (int)scan;
+	}
+
+	head = VGA256_KBD_HEAD[0];
+	if (head == VGA256_KBD_TAIL[0])
+		return -1;   /* empty */
+
+	/* Word at 0040:head (linear 0x400 + head) */
+	word  = *(volatile unsigned short *)(0x400ul + head);
+	ascii = (unsigned char)(word & 0xff);
+	scan  = (unsigned char)(word >> 8);
+
+	/* Advance head by 2, wrap at end of circular buffer */
+	head += 2;
+	if (head >= VGA256_KBD_END)
+		head = VGA256_KBD_START;
+	VGA256_KBD_HEAD[0] = head;
+
+	if (ascii == 0) {
+		_vga256_pending_scan = scan;
+		return 0;
+	}
+	return (int)ascii;
+}
+
+/* Blocking getch() replacement: waits for a key via pure BDA (no BIOS INT). */
+static __inline int VGA256GetCh(void)
+{
+	int c;
+	while ((c = VGA256GetChNB()) < 0)
+		;
+	return c;
+}
+
+/* Drain the keyboard buffer (and any pending extended scan). */
+static __inline void VGA256FlushKbd(void)
+{
+	_vga256_pending_scan = 0;
+	VGA256_KBD_HEAD[0] = VGA256_KBD_TAIL[0];
+}
+
+static __inline void VGA256LineV(void *pVideo, unsigned int x, unsigned int y,
+                                 unsigned int height, unsigned int color)
+{
+	unsigned int h;
+	unsigned char *offset = (unsigned char *)&VGA256OFFSET(pVideo, x, y);
+	unsigned char c = (unsigned char)color;
+	for (h = 0; h < height; h++) {
+		*offset = c;
+		offset += VGA256_Pitch;
+	}
+}
+
+static __inline void VGA256DrawBox(void *pVideo, unsigned int x, unsigned int y,
+                                   unsigned int width, unsigned int height, unsigned int color)
+{
+	VGA256LineV(pVideo, x, y, height + 1, color);
+	VGA256LineV(pVideo, x + width, y, height + 1, color);
+	VGA256LineH(pVideo, x, y, width + 1, color);
+	VGA256LineH(pVideo, x, y + height, width + 1, color);
+}
+
 void VGA256FillBox(void *pVideo, unsigned int x, unsigned int y, unsigned int width, unsigned int height, unsigned int color);
-void VGA256ClearScreen(void *pVideo, unsigned int color);
 void VGA256PutSprite(void *pVideo, void *pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
 void VGA256PutImage(void* pVideo, void* pcSource, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
 void VGA256GetImage(void* pVideo, void* pcDest, unsigned int piX, unsigned int piY, unsigned int piWidth, unsigned int piHeight);
@@ -209,9 +318,10 @@ void VGA256OutText4x(void* pVideo, const char* string, unsigned int x_cursor, un
 int VGA256LoadPCX(const char* filename, unsigned char* dest, unsigned char* pal);
 int VGA256DecodePCX(unsigned char* dest, const unsigned char* buffer);
 int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal);
-int VGA256KbHit(void);
-int VGA256GetCh(void);
 
+
+
+/*------------------------------------------------------------------------------------------------------- */
 
 
 /*------------------------------------------------------------------------------------------------------- */
@@ -308,6 +418,28 @@ void VGA256MemCpyMMX(char* Dest, char* Src, unsigned int Len);
 "jnz mm_lp" \
 "emms" \
 "mm_tail:" \
+"mov ecx, eax" \
+"and ecx, 15" \
+"rep movsb" \
+parm [edi] [esi] [ecx] \
+modify exact [eax ecx esi edi];
+
+/* SSE: 16-byte unaligned moves (movdqu). Safe when only used as pure data blit
+ * under DOS/DPMI (no concurrent FP context switch required for these regs). */
+void VGA256MemCpySSE(char* Dest, char* Src, unsigned int Len);
+#pragma aux VGA256MemCpySSE = \
+"cld" \
+"mov eax, ecx" \
+"shr ecx, 4" \
+"jz sse_tail" \
+"sse_lp:" \
+"movdqu xmm0, [esi]" \
+"movdqu [edi], xmm0" \
+"add esi, 16" \
+"add edi, 16" \
+"dec ecx" \
+"jnz sse_lp" \
+"sse_tail:" \
 "mov ecx, eax" \
 "and ecx, 15" \
 "rep movsb" \
