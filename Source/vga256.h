@@ -193,7 +193,28 @@ extern const unsigned char VGA256Font[];
 
 /* Fast byte-pattern fill: rep stosd main body + byte tail. Faster than
  * memset on a 386 for the typical scanline widths. */
+
+/*------------------------------------------------------------------------------------------------------- */
+/* Fast byte-pattern fill: builds eax = color*0x01010101 and uses rep stosd
+ * for the body plus a byte tail. On a 386 this beats a byte-wise memset
+ * roughly 3:1 for typical scanline lengths. */
 void _VGA256Fill(void *pDest, unsigned char color, unsigned int len);
+#pragma aux _VGA256Fill = \
+"cld" \
+"mov ah, al" \
+"mov bx, ax" \
+"shl eax, 16" \
+"mov ax, bx" \
+"mov edx, ecx" \
+"shr ecx, 2" \
+"rep stosd" \
+"and edx, 3" \
+"mov ecx, edx" \
+"rep stosb" \
+parm [edi] [al] [ecx] \
+modify exact [eax ebx ecx edx edi];
+
+
 
 #define VGA256LineH(pVideo, x, y, width, color) \
 	(_VGA256Fill(&VGA256OFFSET((pVideo), (x), (y)), (unsigned char)(color), (unsigned int)(width)))
@@ -335,7 +356,7 @@ int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal)
 "inc dx" \
 "rep outsb" \
 parm [esi] \
-modify exact [esi edx ecx eax];
+modify exact nomemory [esi edx ecx eax];
 
 
 /*------------------------------------------------------------------------------------------------------- */

@@ -588,7 +588,9 @@ int VBE_Init (void)
 	{
 		int i;
 		vbe_mode_cache_count = 0;
-		for (i = 0; (i < 1024) && (VBE_Controller_Info_Pointer->VideoModePtr[i] != 0xffff); i++) {
+		/* VideoModePtr apunta al bloque DOS de 512 bytes reservado arriba:
+		   como mucho 256 entradas de 2 bytes; no leer mas alla */
+		for (i = 0; (i < 256) && (VBE_Controller_Info_Pointer->VideoModePtr[i] != 0xffff); i++) {
 			struct VBE_ModeInfoBlock Info;
 			unsigned short m = VBE_Controller_Info_Pointer->VideoModePtr[i];
 			VBE_Mode_Information ((short)m, &Info);
