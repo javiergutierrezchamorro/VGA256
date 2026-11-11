@@ -191,10 +191,6 @@ extern const unsigned char VGA256Font[];
  * expands them without a call.  Arguments must not have side effects
  * (same rule as VGA256OFFSET). */
 
-/* Fast byte-pattern fill: rep stosd main body + byte tail. Faster than
- * memset on a 386 for the typical scanline widths. */
-
-/*------------------------------------------------------------------------------------------------------- */
 /* Fast byte-pattern fill: builds eax = color*0x01010101 and uses rep stosd
  * for the body plus a byte tail. On a 386 this beats a byte-wise memset
  * roughly 3:1 for typical scanline lengths. */
@@ -356,7 +352,7 @@ int VGA256LoadBMP(const char* filename, unsigned char* dest, unsigned char* pal)
 "inc dx" \
 "rep outsb" \
 parm [esi] \
-modify exact nomemory [esi edx ecx eax];
+modify exact [esi edx ecx eax];
 
 
 /*------------------------------------------------------------------------------------------------------- */
@@ -445,7 +441,7 @@ void VGA256MemCpyMMX(char* Dest, char* Src, unsigned int Len);
 parm [edi] [esi] [ecx] \
 modify exact [eax ecx esi edi];
 
-/* SSE: 16-byte unaligned moves (movdqu). Safe when only used as pure data blit
+/* SSE: 16-byte unaligned moves (movups, SSE1). Safe when only used as pure data blit
  * under DOS/DPMI (no concurrent FP context switch required for these regs). */
 void VGA256MemCpySSE(char* Dest, char* Src, unsigned int Len);
 #pragma aux VGA256MemCpySSE = \
@@ -454,8 +450,8 @@ void VGA256MemCpySSE(char* Dest, char* Src, unsigned int Len);
 "shr ecx, 4" \
 "jz sse_tail" \
 "sse_lp:" \
-"movdqu xmm0, [esi]" \
-"movdqu [edi], xmm0" \
+"movups xmm0, [esi]" \
+"movups [edi], xmm0" \
 "add esi, 16" \
 "add edi, 16" \
 "dec ecx" \
@@ -466,6 +462,68 @@ void VGA256MemCpySSE(char* Dest, char* Src, unsigned int Len);
 "rep movsb" \
 parm [edi] [esi] [ecx] \
 modify exact [eax ecx esi edi];
+
+/* Pattern fill with MMX: replicate color to 8 bytes, store 16 bytes/iter.
+ * Color is kept in bl for the byte tail. */
+void VGA256FillMMX(void *dst, unsigned char color, unsigned int len);
+#pragma aux VGA256FillMMX = \
+"cld" \
+"mov bl, al" \
+"mov ah, al" \
+"mov dx, ax" \
+"shl eax, 16" \
+"mov ax, dx" \
+"movd mm0, eax" \
+"punpckldq mm0, mm0" \
+"mov edx, ecx" \
+"shr ecx, 4" \
+"jz fm_tail" \
+"fm_lp:" \
+"movq [edi], mm0" \
+"movq [edi+8], mm0" \
+"add edi, 16" \
+"dec ecx" \
+"jnz fm_lp" \
+"emms" \
+"fm_tail:" \
+"mov ecx, edx" \
+"and ecx, 15" \
+"jz fm_done" \
+"mov al, bl" \
+"rep stosb" \
+"fm_done:" \
+parm [edi] [al] [ecx] \
+modify exact [eax ebx ecx edx edi];
+
+/* Pattern fill with SSE1: replicate color across xmm0 via shufps, movups 16 bytes/iter.
+ * Color is kept in bl for the byte tail. */
+void VGA256FillSSE(void *dst, unsigned char color, unsigned int len);
+#pragma aux VGA256FillSSE = \
+"cld" \
+"mov bl, al" \
+"mov ah, al" \
+"mov dx, ax" \
+"shl eax, 16" \
+"mov ax, dx" \
+"movd xmm0, eax" \
+"shufps xmm0, xmm0, 0" \
+"mov edx, ecx" \
+"shr ecx, 4" \
+"jz fs_tail" \
+"fs_lp:" \
+"movups [edi], xmm0" \
+"add edi, 16" \
+"dec ecx" \
+"jnz fs_lp" \
+"fs_tail:" \
+"mov ecx, edx" \
+"and ecx, 15" \
+"jz fs_done" \
+"mov al, bl" \
+"rep stosb" \
+"fs_done:" \
+parm [edi] [al] [ecx] \
+modify exact [eax ebx ecx edx edi];
 
 #ifdef __cplusplus
 }
