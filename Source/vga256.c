@@ -660,6 +660,23 @@ void VBE_Done (void)
 		free (pmcode);
 		pmcode = NULL;
 	}
+	/* Drop the PM call pointers: they pointed into the just-freed pmcode,
+	   so a later VBE_SetBank / VBE_SetDisplayStart through the PM thunks
+	   (PM_SetBank / asmSB do "call [pm_setwindowcall]") would dereference
+	   freed memory.  Fall back to the real-mode calls, which only touch the
+	   static RMI (no DOS blocks, no pmcode).  Reset pitch / blit state to
+	   the no-mode baseline too, so a Done -> Init cycle without an
+	   intervening VBE_SetMode never sees stale values. */
+	pm_setwindowcall = NULL;
+	pm_setdisplaystartcall = NULL;
+	VBE_SetBank = RM_SetBank;
+	VBE_SetDisplayStart = RM_SetDisplayStart;
+	BytesPerScanline = 0;
+	BitsPerPixel = 0;
+	VGA256_Pitch = VGA256_WIDTH;
+	VGA256_CPUCaps = 0;
+	VGA256_BlitCopy = VGA256_BlitCopy_Std;
+	VGA256_Fill = VGA256_Fill_Std;
 }
 
 
